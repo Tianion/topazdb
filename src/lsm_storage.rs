@@ -151,7 +151,10 @@ impl LsmStorage {
         self.inner.memtables.read().put(key, value)?;
         if self.inner.memtables.read().memtable.size() > self.opt.memtable_size {
             if let Some(mut guard) = self.inner.memtables.try_write() {
-                guard.use_new_table()?;
+                // secondary check. try_write just reduces the number of lock acquirers
+                if guard.memtable.size() > self.opt.memtable_size {
+                    guard.use_new_table()?;
+                }
             }
         }
         Ok(())
