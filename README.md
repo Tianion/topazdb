@@ -1,7 +1,7 @@
 # topazdb
 A persistent key-value storage in rust, based on LSM tree.
 
-This project is still under development.
+**This project is still under development.**
 
 ## Plan
 - [x] Basic features
@@ -27,11 +27,11 @@ This project is still under development.
 - [ ] More test
   - [ ] Bench Test
   - [ ] Shutdown Test
-
-## not sure whether to do
-- Direct I/O
-- Async iterator
-- Secondary key support 
+- [ ] Undetermined
+  - [ ] Direct I/O
+  - [ ] Async iterator
+  - [ ] Secondary key support 
+  - [ ] Network
 
 ## Reference
 - https://github.com/tikv/agatedb
