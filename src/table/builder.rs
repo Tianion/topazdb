@@ -72,8 +72,7 @@ impl SsTableBuilder {
         self.estimated_size() >= TABLE_CAPACITY
     }
 
-    /// Builds the SSTable and writes it to the given path. No need to actually write to disk until
-    /// chapter 4 block cache.
+    /// Builds the SSTable and writes it to the given path. 
     pub fn build(
         mut self,
         id: u64,

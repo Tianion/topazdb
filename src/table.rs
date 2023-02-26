@@ -171,7 +171,7 @@ impl SsTable {
             .map(|x| x.offset)
             .unwrap_or(self.block_meta_offset);
         let buf = self.file.read(offset, end - offset)?;
-        let block = Block::decode(&buf);
+        let block = Block::decode(&buf)?;
         Ok(Arc::new(block))
     }
 
