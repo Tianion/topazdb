@@ -51,8 +51,7 @@ impl Block {
             offsets.push(buf.get_u16());
         }
 
-        let data = Bytes::from(buf);
-        Ok(Self { data, offsets })
+        Ok(Self { data: buf, offsets })
     }
 }
 

@@ -25,8 +25,8 @@ pub struct LsmOptions {
     pub num_levels: usize, // default 6
 }
 
-impl LsmOptions {
-    pub fn default() -> Self {
+impl Default for LsmOptions {
+    fn default() -> Self {
         LsmOptions { 
             dir: PathBuf::new(),
             flush_num: 1, 
@@ -44,8 +44,11 @@ impl LsmOptions {
             num_levels: 6 
         }
     }
+}
 
-    pub fn path(mut self, path: impl AsRef<Path>) -> Self {
+impl LsmOptions {
+    
+    pub fn set_path(mut self, path: impl AsRef<Path>) -> Self {
         self.dir = path.as_ref().to_path_buf();
         self
     }

@@ -57,7 +57,7 @@ impl LevelsControllerInner {
         let path = &opt.dir;
         let (manifest, l0_ids) = ManifestFile::open(path)?;
         let id_level = manifest.get_id_level();
-        let next_sst_id = AtomicU64::new(id_level.iter().map(|(id, _)| *id).max().unwrap_or(0));
+        let next_sst_id = AtomicU64::new(id_level.keys().copied().max().unwrap_or(0));
         let mut levels = vec![vec![]; MAX_LEVEL];
 
         for id in l0_ids {
@@ -250,9 +250,8 @@ impl LevelsControllerInner {
     fn fill_table_l0(&self) -> Option<Task> {
         let this_tables = self.levels[0].read().clone();
         let next_tables = self.levels[1].read().clone();
-        let mut task = Task::default();
-        task.this_level_id = 0;
-        task.next_level_id = 1;
+        let mut task = Task {this_level_id: 0, next_level_id: 1, ..Default::default()};
+
         let mut this_compact_job = self.compact_job[0].lock();
         let mut next_compact_job = self.compact_job[1].lock();
         let mut job = HashSet::new();
@@ -302,7 +301,7 @@ impl LevelsControllerInner {
         if level == 0 {
             return self.fill_table_l0();
         }
-        return self.fill_table(level);
+        self.fill_table(level)
     }
 
     fn fill_table(&self, level: usize) -> Option<Task> {
@@ -312,9 +311,8 @@ impl LevelsControllerInner {
         this_tables.sort_by(|a, b| b.size.partial_cmp(&a.size).unwrap());
         let next_tables = self.levels[level + 1].read().clone();
 
-        let mut task = Task::default();
-        task.this_level_id = level;
-        task.next_level_id = level + 1;
+        let mut task = Task {this_level_id: level, next_level_id: level + 1, ..Default::default()};
+
         let mut this_compact_job = self.compact_job[level].lock();
         let mut next_compact_job = self.compact_job[level + 1].lock();
         let mut job = HashSet::new();

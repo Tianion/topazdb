@@ -36,7 +36,7 @@ fn check_iter_result(iter: impl StorageIterator, expected: Vec<(Bytes, Bytes)>) 
 fn test_storage_get() {
     use crate::lsm_storage::LsmStorage;
     let dir = tempdir().unwrap();
-    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+    let storage = LsmStorage::open(LsmOptions::default().set_path(&dir)).unwrap();
     storage.put(b"1", b"233").unwrap();
     storage.put(b"2", b"2333").unwrap();
     storage.put(b"3", b"23333").unwrap();
@@ -51,7 +51,7 @@ fn test_storage_get() {
 fn test_storage_scan_memtable_1() {
     use crate::lsm_storage::LsmStorage;
     let dir = tempdir().unwrap();
-    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+    let storage = LsmStorage::open(LsmOptions::default().set_path(&dir)).unwrap();
     storage.put(b"1", b"233").unwrap();
     storage.put(b"2", b"2333").unwrap();
     storage.put(b"3", b"23333").unwrap();
@@ -81,7 +81,7 @@ fn test_storage_scan_memtable_1() {
 fn test_storage_scan_memtable_2() {
     use crate::lsm_storage::LsmStorage;
     let dir = tempdir().unwrap();
-    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+    let storage = LsmStorage::open(LsmOptions::default().set_path(&dir)).unwrap();
     storage.put(b"1", b"233").unwrap();
     storage.put(b"2", b"2333").unwrap();
     storage.put(b"3", b"23333").unwrap();
@@ -111,7 +111,7 @@ fn test_storage_scan_memtable_2() {
 fn test_storage_get_after_sync() {
     use crate::lsm_storage::LsmStorage;
     let dir = tempdir().unwrap();
-    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+    let storage = LsmStorage::open(LsmOptions::default().set_path(&dir)).unwrap();
     storage.put(b"1", b"233").unwrap();
     storage.put(b"2", b"2333").unwrap();
     storage.sync().unwrap();
@@ -127,7 +127,7 @@ fn test_storage_get_after_sync() {
 fn test_storage_scan_memtable_1_after_sync() {
     use crate::lsm_storage::LsmStorage;
     let dir = tempdir().unwrap();
-    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+    let storage = LsmStorage::open(LsmOptions::default().set_path(&dir)).unwrap();
     storage.put(b"1", b"233").unwrap();
     storage.put(b"2", b"2333").unwrap();
     storage.sync().unwrap();
@@ -158,7 +158,7 @@ fn test_storage_scan_memtable_1_after_sync() {
 fn test_storage_scan_memtable_2_after_sync() {
     use crate::lsm_storage::LsmStorage;
     let dir = tempdir().unwrap();
-    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+    let storage = LsmStorage::open(LsmOptions::default().set_path(&dir)).unwrap();
     storage.put(b"1", b"233").unwrap();
     storage.put(b"2", b"2333").unwrap();
     storage.sync().unwrap();

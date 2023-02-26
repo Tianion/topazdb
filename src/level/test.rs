@@ -108,7 +108,7 @@ fn ranges_split() {
 }
 
 fn lvctl_new(dir: &TempDir) -> LevelController {
-    LevelController::open(LsmOptions::default().path(dir.path())).unwrap()
+    LevelController::open(LsmOptions::default().set_path(dir.path())).unwrap()
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn get_simple_not_exist() {
 #[test]
 fn get_key_new_old() {
     let dir = TempDir::new().unwrap();
-    let lvctl = LevelController::open(LsmOptions::default().path(dir.path())).unwrap();
+    let lvctl = LevelController::open(LsmOptions::default().set_path(dir.path())).unwrap();
     let mut builder = SsTableBuilder::new(64);
     for i in 0..10 {
         builder.add(&key_of(i), &value_of(i, "old"));
@@ -196,7 +196,7 @@ fn get_key_drop() {
 }
 
 fn generate_lvctl(path: impl AsRef<Path>) -> (LevelController, BTreeMap<Bytes, Bytes>) {
-    let lvctl = LevelController::open(LsmOptions::default().path(path)).unwrap();
+    let lvctl = LevelController::open(LsmOptions::default().set_path(path)).unwrap();
     let mut map = BTreeMap::new();
     for i in 0..10 {
         let mut builder = SsTableBuilder::new(64);
