@@ -1,7 +1,7 @@
 use std::path::{PathBuf, Path};
 use anyhow::Result;
 
-use crate::lsm_storage::LsmStorage;
+use crate::{lsm_storage::LsmStorage, block::CompressOptions};
 
 
 #[derive(Clone)]
@@ -23,6 +23,7 @@ pub struct LsmOptions {
     pub max_bytes_for_level_base: usize, // default 256MB * 2 * 5
     pub max_bytes_for_level_multiplier: usize, // default 10
     pub num_levels: usize, // default 6
+    pub compress_option: CompressOptions,
 }
 
 impl Default for LsmOptions {
@@ -41,7 +42,8 @@ impl Default for LsmOptions {
             max_bytes_for_level_base: 256 * 1024 * 1024 * 2 * 5, 
             target_file_size_base: 256 * 1024 * 1024,
             max_bytes_for_level_multiplier: 10, 
-            num_levels: 6 
+            num_levels: 6,
+            compress_option: CompressOptions::Snappy,
         }
     }
 }

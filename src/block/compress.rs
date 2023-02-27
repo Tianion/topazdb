@@ -1,5 +1,7 @@
+use std::fmt;
+
 use bytes::{Bytes, BytesMut, BufMut};
-use snap::raw::{Encoder, Decoder};
+use lz4;
 use anyhow::Result;
 
 /*
@@ -25,16 +27,25 @@ Found 2 outliers among 100 measurements (2.00%)
 
 
 // may support more compression methods?
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum CompressOptions {
     Unkown = 0,
     Uncompress = 1,
     Snappy = 2,
+    Lz4 = 3,
 }
+
+impl fmt::Display for CompressOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 
 impl From<u8> for CompressOptions {
     fn from(value: u8) -> Self {
         match value {
+            3 => CompressOptions::Lz4,
             2 => CompressOptions::Snappy,
             1 => CompressOptions::Uncompress,
             _ => CompressOptions::Unkown,
@@ -45,28 +56,44 @@ impl From<u8> for CompressOptions {
 impl From<CompressOptions> for u8 {
     fn from(value: CompressOptions) -> Self {
         match value {
+            CompressOptions::Unkown => 0,
             CompressOptions::Uncompress => 1,
             CompressOptions::Snappy => 2,
-            CompressOptions::Unkown => 0,
+            CompressOptions::Lz4 => 3,
         }
     }
 }
 
-/// if compression fail, return uncompressed bytes
-/// Now the opt is invaild. The default is Snappy
-pub fn encode(data: &[u8], opt: CompressOptions) -> Bytes {
-    assert_eq!(opt, CompressOptions::Snappy);
-    // compress return Err when buf is too big or too small
-    // this err could be ignore
-    if let Ok(mut compressed) 
-        = Encoder::new().compress_vec(data) 
-    {
-        compressed.push(CompressOptions::Snappy.into());
-        return Bytes::from(compressed);
+fn snappy_encode(data: &[u8]) -> Result<Bytes> {
+    let mut data = 
+        snap::raw::Encoder::new().compress_vec(data)?;
+
+    data.push(CompressOptions::Snappy.into());
+    Ok(data.into())
+
+}
+
+fn lz4_encode(data: &[u8]) -> Result<Bytes> {
+    let mut data = 
+        lz4::block::compress(data, None, true)?;
+    data.push(CompressOptions::Lz4.into());
+    Ok(data.into())
+}
+
+/// return compressed data
+/// 
+/// Error: buf is too big or too small
+pub fn encode(data: &[u8], opt: CompressOptions) -> Result<Bytes> {
+    match opt {
+        CompressOptions::Unkown => panic!("unkown compress option"),
+        CompressOptions::Uncompress => {
+            let mut buf = BytesMut::from(data);
+            buf.put_u8(CompressOptions::Uncompress.into());
+            Ok(buf.freeze())
+        },
+        CompressOptions::Snappy => snappy_encode(data),
+        CompressOptions::Lz4 => lz4_encode(data)
     }
-    let mut buf = BytesMut::from(data);
-    buf.put_u8(CompressOptions::Uncompress.into());
-    buf.freeze()
 }
 
 pub fn decode(data: &[u8]) -> Result<Bytes> {
@@ -76,12 +103,16 @@ pub fn decode(data: &[u8]) -> Result<Bytes> {
     let option = *data.last().unwrap();
     let data = &data[..data.len() - 1];
     match CompressOptions::from(option) {
+        CompressOptions::Unkown => Err(anyhow::anyhow!("invaild data")),
         CompressOptions::Uncompress => Ok(Bytes::copy_from_slice(data)),
         CompressOptions::Snappy => {
-            let uncompressed = Decoder::new().decompress_vec(data)?;
+            let uncompressed = snap::raw::Decoder::new().decompress_vec(data)?;
             Ok(Bytes::from(uncompressed))
         }
-        CompressOptions::Unkown => Err(anyhow::anyhow!("invaild data")),
+        CompressOptions::Lz4 => {
+            let uncompressed = lz4::block::decompress(data, None)?;
+            Ok(uncompressed.into())
+        },
     }
 }
 
@@ -92,7 +123,7 @@ mod test {
     use super::{encode, decode};
 
     #[test]
-    fn test_compress() {
+    fn test_snappy() {
         let mut builder = BlockBuilder::new(2048);
         for i in 0..100 {
             if !builder.add(format!("key_{}", i).as_bytes(), format!("value_{}", i).as_bytes()) {
@@ -101,14 +132,38 @@ mod test {
         }
         let block = builder.build();
         let uncompress_size = block.uncompress_size();
-        let compressed = block.encode();
+        let compressed = block.encode(CompressOptions::Snappy).unwrap();
+        println!("uncompress_size: {uncompress_size}, snappy: {}", compressed.len());
         assert!(uncompress_size - compressed.len() > uncompress_size / 10)
     }
 
     #[test]
-    fn test_compress_and_uncompress() {
+    fn test_lz4() {
+        let mut builder = BlockBuilder::new(2048);
+        for i in 0..100 {
+            if !builder.add(format!("key_{}", i).as_bytes(), format!("value_{}", i).as_bytes()) {
+                break;
+            }
+        }
+        let block = builder.build();
+        let uncompress_size = block.uncompress_size();
+        let compressed = block.encode(CompressOptions::Lz4).unwrap();
+        println!("uncompress_size: {uncompress_size}, lz4: {}", compressed.len());
+        assert!(uncompress_size - compressed.len() > uncompress_size / 10)
+    }
+
+    #[test]
+    fn test_compress_and_uncompress_snap() {
         let str = b"a simple string";
-        let compressed = encode(str, CompressOptions::Snappy);
+        let compressed = encode(str, CompressOptions::Snappy).unwrap();
+        let uncompressed = decode(&compressed).unwrap();
+        assert_eq!(str[..], uncompressed);
+    }
+
+    #[test]
+    fn test_compress_and_uncompress_lz4() {
+        let str = b"a simple string";
+        let compressed = encode(str, CompressOptions::Lz4).unwrap();
         let uncompressed = decode(&compressed).unwrap();
         assert_eq!(str[..], uncompressed);
     }

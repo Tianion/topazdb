@@ -174,7 +174,7 @@ impl MemTable {
     /// Flush the mem-table to SSTable.
     pub fn flush(&self, builder: &mut SsTableBuilder) -> Result<()> {
         for entry in self.map.iter() {
-            builder.add(entry.key(), entry.value());
+            builder.add(entry.key(), entry.value())?;
         }
         Ok(())
     }

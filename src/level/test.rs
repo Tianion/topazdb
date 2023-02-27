@@ -5,7 +5,7 @@ use tempfile::TempDir;
 
 use crate::{
     table::{SsTable, SsTableBuilder},
-    util::sstable_file_path, opt::LsmOptions,
+    util::sstable_file_path, opt::LsmOptions, block::CompressOptions,
 };
 
 use super::{
@@ -29,9 +29,9 @@ fn generate_sst(
     path: impl AsRef<Path>,
     info: &str,
 ) -> SsTable {
-    let mut builder = SsTableBuilder::new(64);
+    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
     for idx in lower..upper {
-        builder.add(&key_of(idx), &value_of(idx, info));
+        builder.add(&key_of(idx), &value_of(idx, info)).unwrap();
     }
     builder
         .build(id, None, sstable_file_path(path.as_ref(), id))
@@ -115,9 +115,9 @@ fn lvctl_new(dir: &TempDir) -> LevelController {
 fn get_simple_key() {
     let dir = TempDir::new().unwrap();
     let lvctl = lvctl_new(&dir);
-    let mut builder = SsTableBuilder::new(64);
+    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
     for i in 0..10 {
-        builder.add(&key_of(i), &value_of(i, ""));
+        builder.add(&key_of(i), &value_of(i, "")).unwrap();
     }
     lvctl.l0_push_sstable(builder).unwrap();
     for i in 0..10 {
@@ -130,9 +130,9 @@ fn get_simple_not_exist() {
     let dir = TempDir::new().unwrap();
     let lvctl = lvctl_new(&dir);
     assert_eq!(None, lvctl.get(b"aaaaa").unwrap());
-    let mut builder = SsTableBuilder::new(64);
+    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
     for i in 0..10 {
-        builder.add(&key_of(i), &value_of(i, ""));
+        builder.add(&key_of(i), &value_of(i, "")).unwrap();
     }
     lvctl.l0_push_sstable(builder).unwrap();
     assert_eq!(None, lvctl.get(b"aaaaa").unwrap());
@@ -142,14 +142,14 @@ fn get_simple_not_exist() {
 fn get_key_new_old() {
     let dir = TempDir::new().unwrap();
     let lvctl = LevelController::open(LsmOptions::default().set_path(dir.path())).unwrap();
-    let mut builder = SsTableBuilder::new(64);
+    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
     for i in 0..10 {
-        builder.add(&key_of(i), &value_of(i, "old"));
+        builder.add(&key_of(i), &value_of(i, "old")).unwrap();
     }
     lvctl.l0_push_sstable(builder).unwrap();
-    let mut builder = SsTableBuilder::new(64);
+    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
     for i in 0..10 {
-        builder.add(&key_of(i), &value_of(i, "new"));
+        builder.add(&key_of(i), &value_of(i, "new")).unwrap();
     }
     lvctl.l0_push_sstable(builder).unwrap();
     for i in 0..10 {
@@ -164,14 +164,14 @@ fn get_key_new_old() {
 fn get_key_delete() {
     let dir = TempDir::new().unwrap();
     let lvctl = lvctl_new(&dir);
-    let mut builder = SsTableBuilder::new(64);
+    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
     for i in 0..10 {
-        builder.add(&key_of(i), &value_of(i, "old"));
+        builder.add(&key_of(i), &value_of(i, "old")).unwrap();
     }
     lvctl.l0_push_sstable(builder).unwrap();
-    let mut builder = SsTableBuilder::new(64);
+    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
     for i in 0..10 {
-        builder.add(&key_of(i), b"");
+        builder.add(&key_of(i), b"").unwrap();
     }
     lvctl.l0_push_sstable(builder).unwrap();
     for i in 0..10 {
@@ -183,9 +183,9 @@ fn get_key_delete() {
 fn get_key_drop() {
     let dir = TempDir::new().unwrap();
     let lvctl = lvctl_new(&dir);
-    let mut builder = SsTableBuilder::new(64);
+    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
     for i in 0..10 {
-        builder.add(&key_of(i), &value_of(i, ""));
+        builder.add(&key_of(i), &value_of(i, "")).unwrap();
     }
     lvctl.l0_push_sstable(builder).unwrap();
     drop(lvctl);
@@ -199,11 +199,11 @@ fn generate_lvctl(path: impl AsRef<Path>) -> (LevelController, BTreeMap<Bytes, B
     let lvctl = LevelController::open(LsmOptions::default().set_path(path)).unwrap();
     let mut map = BTreeMap::new();
     for i in 0..10 {
-        let mut builder = SsTableBuilder::new(64);
+        let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
         for j in i * 50..i * 50 + 70 {
             let key = key_of(j);
             let val = value_of(j, &i.to_string());
-            builder.add(&key, &val);
+            builder.add(&key, &val).unwrap();
             map.insert(Bytes::copy_from_slice(&key), Bytes::copy_from_slice(&val));
         }
         lvctl.l0_push_sstable(builder).unwrap();

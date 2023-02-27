@@ -49,13 +49,13 @@ fn test_block_build_all() {
 #[test]
 fn test_block_encode() {
     let block = generate_block();
-    block.encode();
+    block.encode(CompressOptions::Uncompress).unwrap();
 }
 
 #[test]
 fn test_block_decode() {
     let block = generate_block();
-    let encoded = block.encode();
+    let encoded = block.encode(CompressOptions::Uncompress).unwrap();
     let decoded_block = Block::decode(&encoded).unwrap();
     assert_eq!(block.offsets, decoded_block.offsets);
     assert_eq!(block.data, decoded_block.data);

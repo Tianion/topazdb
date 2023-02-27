@@ -6,6 +6,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use super::{BlockMeta, FileObject, SsTable};
 use crate::block::BlockBuilder;
+use crate::block::CompressOptions;
 use crate::block::SIZEOF_U16;
 use crate::level::BlockCache;
 
@@ -17,41 +18,43 @@ pub struct SsTableBuilder {
     block_builder: BlockBuilder,
     base_key: Bytes,
     block_size: usize,
+    compress_option: CompressOptions,
 }
 
 const TABLE_CAPACITY: usize = 64 * 1024 * 1024;
 
 impl SsTableBuilder {
     /// Create a builder based on target block size.
-    pub fn new(block_size: usize) -> Self {
+    pub fn new(block_size: usize, compress_option: CompressOptions) -> Self {
         Self {
             meta: vec![],
             data: BytesMut::new(),
             block_builder: BlockBuilder::new(block_size),
             base_key: Bytes::new(),
             block_size,
+            compress_option
         }
     }
 
     /// Adds a key-value pair to SSTable
-    pub fn add(&mut self, key: &[u8], value: &[u8]) {
+    pub fn add(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
         if self.base_key.is_empty() {
             self.base_key = Bytes::copy_from_slice(key);
         }
 
         if self.block_builder.add(key, value) {
-            return;
+            return Ok(());
         }
 
-        self.block_build();
+        self.block_build()?;
         self.add(key, value)
     }
 
-    fn block_build(&mut self) {
+    fn block_build(&mut self) -> Result<()> {
         let mut builder = BlockBuilder::new(self.block_size);
         std::mem::swap(&mut self.block_builder, &mut builder);
 
-        let byte = builder.build().encode();
+        let byte = builder.build().encode(self.compress_option)?;
         let mut key = Bytes::new();
         std::mem::swap(&mut key, &mut self.base_key);
 
@@ -61,6 +64,7 @@ impl SsTableBuilder {
         };
         self.meta.push(meta);
         self.data.put(byte);
+        Ok(())
     }
 
     /// Get the estimated size of the SSTable.
@@ -79,7 +83,7 @@ impl SsTableBuilder {
         block_cache: Option<Arc<BlockCache>>,
         path: impl AsRef<Path>,
     ) -> Result<SsTable> {
-        self.block_build();
+        self.block_build()?;
         let offset = self.data.len();
         let mut buf = vec![];
         BlockMeta::encode_block_meta(&self.meta, &mut buf);

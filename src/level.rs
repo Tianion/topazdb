@@ -137,7 +137,7 @@ impl LevelsControllerInner {
 
         let mut iter = MergeIterator::create(iters);
 
-        let mut builder = SsTableBuilder::new(4096);
+        let mut builder = SsTableBuilder::new(4096, self.opt.compress_option);
         while iter.is_valid() {
             builder.add(iter.key(), iter.value());
             iter.next()?;
@@ -174,7 +174,7 @@ impl LevelsControllerInner {
         }
 
         let task = Arc::new(task.unwrap());
-
+        
         let rws = RwsSlice::create(&task);
         // TODO: 得到sub_compact线程数
         let num_sub_compact = 4;
@@ -234,10 +234,10 @@ impl LevelsControllerInner {
             }
         }
         while iter.is_valid() && key_vaild(&iter, &upper) {
-            let mut build = SsTableBuilder::new(4096);
+            let mut build = SsTableBuilder::new(4096, self.opt.compress_option);
 
             while iter.is_valid() && !build.reach_capacity() && key_vaild(&iter, &upper) {
-                build.add(iter.key(), iter.value());
+                build.add(iter.key(), iter.value())?;
                 iter.next()?;
             }
 
@@ -400,7 +400,7 @@ impl LevelsControllerInner {
                 .cloned()
                 .collect::<Vec<_>>();
             *level = new_level;
-        }
+        } 
 
         Ok(())
     }
@@ -510,7 +510,7 @@ impl LevelController {
             };
 
             let ticker = tick(Duration::from_millis(50));
-
+            
             loop {
                 ticker.recv().unwrap();
                 run_once();

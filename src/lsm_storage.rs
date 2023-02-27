@@ -10,9 +10,10 @@ use anyhow::{Ok, Result};
 use bytes::Bytes;
 
 use crossbeam_channel::{tick, select};
-use log::info;
+use log::{info, error};
 use parking_lot::{Mutex, RwLock};
 
+use crate::block::CompressOptions;
 use crate::iterators::merge_iterator::MergeIterator;
 use crate::iterators::two_merge_iterator::TwoMergeIterator;
 use crate::iterators::StorageIterator;
@@ -52,17 +53,16 @@ impl LsmStorageInner {
                     memtables.push(memtable);
                 } 
 
-                
                 let mut iter = MergeIterator::create(
                     memtables.into_iter().map(
                         |x| Box::new(x.scan(Bound::Unbounded, Bound::Unbounded))
                     ).collect()
                 );
 
-                let mut builder = SsTableBuilder::new(inner.opt.block_size);
+                let mut builder = SsTableBuilder::new(inner.opt.block_size, self.opt.compress_option);
 
                 while iter.is_valid() {
-                    builder.add(iter.key(), iter.value());
+                    builder.add(iter.key(), iter.value()).unwrap();
                     iter.next()?;
                 }
 
@@ -79,6 +79,7 @@ impl LsmStorageInner {
             };
             let ticker_run = tick(Duration::from_millis(50));
             let ticker_check = tick(Duration::from_millis(5));
+            info!("flush start");
             loop {
                 if let Err(e) = select! {
                     recv(ticker_run) -> _ => run_once(),
@@ -86,7 +87,7 @@ impl LsmStorageInner {
                 }
                 {
                     // TODO: err handling
-                    info!("error {}", e)
+                    error!("error {}", e)
                 }
             }
         });
@@ -180,9 +181,9 @@ impl LsmStorage {
             }
         }
 
-        let mut builder = SsTableBuilder::new(4096);
+        let mut builder = SsTableBuilder::new(4096, CompressOptions::Uncompress);
         for (key, value) in &map {
-            builder.add(key, value);
+            builder.add(key, value).unwrap();
         }
 
         self.inner.lvctl.l0_push_sstable(builder)?;

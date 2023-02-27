@@ -9,7 +9,7 @@ pub use builder::Entry;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 pub use iterator::BlockIterator;
 
-use self::compress::CompressOptions;
+pub use self::compress::CompressOptions;
 
 pub const SIZEOF_U16: usize = std::mem::size_of::<u16>();
 
@@ -27,7 +27,7 @@ impl Block {
         SIZEOF_U16 + SIZEOF_U16 * self.offsets.len() + self.data.len()
     }
 
-    pub fn encode(&self) -> Bytes {
+    pub fn encode(&self, compress_option: CompressOptions) -> Result<Bytes> {
         let num_element = self.offsets.len();
         let mut buf =
             BytesMut::with_capacity(self.uncompress_size());
@@ -38,7 +38,7 @@ impl Block {
         }
         buf.put(self.data.clone());
 
-        compress::encode(&buf, CompressOptions::Snappy)
+        compress::encode(&buf, compress_option)
     }
 
     pub fn decode(data: &[u8]) -> Result<Self> {
