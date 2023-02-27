@@ -5,12 +5,11 @@ use std::sync::Arc;
 use std::thread::spawn;
 use std::time::Duration;
 
-
 use anyhow::{Ok, Result};
 use bytes::Bytes;
 
-use crossbeam_channel::{tick, select};
-use log::{info, error};
+use crossbeam_channel::{select, tick};
+use log::{error, info};
 use parking_lot::{Mutex, RwLock};
 
 use crate::block::CompressOptions;
@@ -19,7 +18,7 @@ use crate::iterators::two_merge_iterator::TwoMergeIterator;
 use crate::iterators::StorageIterator;
 use crate::level::LevelController;
 use crate::lsm_iterator::{FusedIterator, LsmIterator};
-use crate::mem_table::{MemTables};
+use crate::mem_table::MemTables;
 use crate::opt::LsmOptions;
 use crate::table::{SsTableBuilder, SsTableIterator};
 
@@ -27,7 +26,7 @@ pub struct LsmStorageInner {
     /// Memory table
     memtables: RwLock<MemTables>,
     lvctl: LevelController,
-    opt: LsmOptions
+    opt: LsmOptions,
 }
 
 impl LsmStorageInner {
@@ -35,7 +34,7 @@ impl LsmStorageInner {
         Ok(Self {
             memtables: RwLock::new(MemTables::new(opt.clone())?),
             lvctl: LevelController::open(opt.clone())?,
-            opt
+            opt,
         })
     }
 
@@ -43,23 +42,24 @@ impl LsmStorageInner {
         let inner = self.clone();
         spawn(move || {
             let run_once = || -> Result<()> {
-                let mut imm_memtable = 
-                    inner.memtables.read().imm_memtables.clone();
+                let mut imm_memtable = inner.memtables.read().imm_memtables.clone();
                 if imm_memtable.len() < inner.opt.min_memtable_to_merge {
                     return Ok(());
                 }
                 let mut memtables = Vec::with_capacity(inner.opt.min_memtable_to_merge);
                 while let Some(memtable) = imm_memtable.pop_front() {
                     memtables.push(memtable);
-                } 
+                }
 
                 let mut iter = MergeIterator::create(
-                    memtables.into_iter().map(
-                        |x| Box::new(x.scan(Bound::Unbounded, Bound::Unbounded))
-                    ).collect()
+                    memtables
+                        .into_iter()
+                        .map(|x| Box::new(x.scan(Bound::Unbounded, Bound::Unbounded)))
+                        .collect(),
                 );
 
-                let mut builder = SsTableBuilder::new(inner.opt.block_size, self.opt.compress_option);
+                let mut builder =
+                    SsTableBuilder::new(inner.opt.block_size, self.opt.compress_option);
 
                 while iter.is_valid() {
                     builder.add(iter.key(), iter.value()).unwrap();
@@ -70,10 +70,9 @@ impl LsmStorageInner {
             };
 
             let full_run = || {
-                let len = 
-                    self.memtables.read().imm_memtables.len();
+                let len = self.memtables.read().imm_memtables.len();
                 if len < self.opt.max_memtable_num - 1 {
-                    return Ok(())
+                    return Ok(());
                 }
                 run_once()
             };
@@ -84,8 +83,7 @@ impl LsmStorageInner {
                 if let Err(e) = select! {
                     recv(ticker_run) -> _ => run_once(),
                     recv(ticker_check) -> _ => full_run(),
-                }
-                {
+                } {
                     // TODO: err handling
                     error!("error {}", e)
                 }
@@ -111,11 +109,11 @@ impl LsmStorage {
         Ok(Self {
             inner,
             flush_lock: Mutex::new(()),
-            opt
+            opt,
         })
     }
 
-    /// Get a key from the storage. 
+    /// Get a key from the storage.
     // TODO: this can be further optimized by using a bloom filter.
     pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
         assert!(!key.is_empty(), "key cannot be empty");
@@ -146,7 +144,6 @@ impl LsmStorage {
     pub fn delete(&self, key: &[u8]) -> Result<()> {
         assert!(!key.is_empty(), "key cannot be empty");
         self.do_put(key, b"")
-        
     }
     fn do_put(&self, key: &[u8], value: &[u8]) -> Result<()> {
         self.inner.memtables.read().put(key, value)?;

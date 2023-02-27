@@ -1,6 +1,6 @@
 mod builder;
-mod iterator;
 mod compress;
+mod iterator;
 
 use anyhow::Ok;
 use anyhow::Result;
@@ -22,15 +22,13 @@ pub struct Block {
 }
 
 impl Block {
-
     pub fn uncompress_size(&self) -> usize {
         SIZEOF_U16 + SIZEOF_U16 * self.offsets.len() + self.data.len()
     }
 
     pub fn encode(&self, compress_option: CompressOptions) -> Result<Bytes> {
         let num_element = self.offsets.len();
-        let mut buf =
-            BytesMut::with_capacity(self.uncompress_size());
+        let mut buf = BytesMut::with_capacity(self.uncompress_size());
         // |num_element|offsets|data| is easier to decode than |data|offsets|num_element|
         buf.put_u16(num_element as u16);
         for &offset in &self.offsets {

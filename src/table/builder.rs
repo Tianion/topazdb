@@ -32,7 +32,7 @@ impl SsTableBuilder {
             block_builder: BlockBuilder::new(block_size),
             base_key: Bytes::new(),
             block_size,
-            compress_option
+            compress_option,
         }
     }
 
@@ -76,7 +76,7 @@ impl SsTableBuilder {
         self.estimated_size() >= TABLE_CAPACITY
     }
 
-    /// Builds the SSTable and writes it to the given path. 
+    /// Builds the SSTable and writes it to the given path.
     pub fn build(
         mut self,
         id: u64,

@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::ops::Bound;
-use std::path::{Path};
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -13,22 +13,18 @@ use ouroboros::self_referencing;
 use crate::iterators::StorageIterator;
 use crate::opt::LsmOptions;
 use crate::table::SsTableBuilder;
-use crate::util::{MEMTABLE_FILE_EXT, memtable_file_path};
+use crate::util::{memtable_file_path, MEMTABLE_FILE_EXT};
 use crate::wal::Wal;
-
-
 
 pub struct MemTables {
     pub memtable: Arc<MemTable>,
     pub imm_memtables: VecDeque<Arc<MemTable>>,
     pub next_mem_id: usize,
-    opt: LsmOptions
+    opt: LsmOptions,
 }
-
 
 impl MemTables {
     pub fn new(opt: LsmOptions) -> Result<Self> {
-        
         let (imm_memtables, next_mem_id) = Self::open_mem_tables(&opt)?;
 
         Ok(MemTables {
@@ -72,10 +68,6 @@ impl MemTables {
         Ok((mts, next_mem_fid))
     }
 
-
-
-
-
     pub fn view(&self) -> Vec<Arc<MemTable>> {
         let mut view = Vec::with_capacity(self.imm_memtables.len() + 1);
         for memtable in self.imm_memtables.iter() {
@@ -94,8 +86,7 @@ impl MemTables {
 
     /// Put a key-value pair into the mutable mem-table.
     pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
-        self.memtable
-            .put(key, value)
+        self.memtable.put(key, value)
     }
 }
 
@@ -110,7 +101,7 @@ impl MemTable {
     pub fn create(path: impl AsRef<Path>, id: usize) -> Result<Self> {
         Ok(Self {
             map: Arc::new(SkipMap::new()),
-            wal: Wal::create(memtable_file_path(path, id))?
+            wal: Wal::create(memtable_file_path(path, id))?,
         })
     }
 
@@ -119,10 +110,16 @@ impl MemTable {
         let mut iter = wal.iter()?;
         let map = SkipMap::new();
         while iter.is_valid() {
-            map.insert(Bytes::copy_from_slice(iter.key()) , Bytes::copy_from_slice(iter.value()));
+            map.insert(
+                Bytes::copy_from_slice(iter.key()),
+                Bytes::copy_from_slice(iter.value()),
+            );
             iter.next();
         }
-        Ok(Self { map: map.into(), wal })
+        Ok(Self {
+            map: map.into(),
+            wal,
+        })
     }
 
     #[cfg(test)]

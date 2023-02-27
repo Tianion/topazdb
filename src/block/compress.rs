@@ -1,11 +1,11 @@
 use std::fmt;
 
-use bytes::{Bytes, BytesMut, BufMut};
-use lz4;
 use anyhow::Result;
+use bytes::{BufMut, Bytes, BytesMut};
+use lz4;
 
 /*
-TODO: should we compress block? 
+TODO: should we compress block?
 Compression is too slow in bench_iter_create_and_read(benches/sstable_read.rs)
 This maybe a performance trap
 ``` 1000 pairs key-value
@@ -25,7 +25,6 @@ Found 2 outliers among 100 measurements (2.00%)
 ```
  */
 
-
 // may support more compression methods?
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum CompressOptions {
@@ -40,7 +39,6 @@ impl fmt::Display for CompressOptions {
         write!(f, "{:?}", self)
     }
 }
-
 
 impl From<u8> for CompressOptions {
     fn from(value: u8) -> Self {
@@ -65,23 +63,20 @@ impl From<CompressOptions> for u8 {
 }
 
 fn snappy_encode(data: &[u8]) -> Result<Bytes> {
-    let mut data = 
-        snap::raw::Encoder::new().compress_vec(data)?;
+    let mut data = snap::raw::Encoder::new().compress_vec(data)?;
 
     data.push(CompressOptions::Snappy.into());
     Ok(data.into())
-
 }
 
 fn lz4_encode(data: &[u8]) -> Result<Bytes> {
-    let mut data = 
-        lz4::block::compress(data, None, true)?;
+    let mut data = lz4::block::compress(data, None, true)?;
     data.push(CompressOptions::Lz4.into());
     Ok(data.into())
 }
 
 /// return compressed data
-/// 
+///
 /// Error: buf is too big or too small
 pub fn encode(data: &[u8], opt: CompressOptions) -> Result<Bytes> {
     match opt {
@@ -90,9 +85,9 @@ pub fn encode(data: &[u8], opt: CompressOptions) -> Result<Bytes> {
             let mut buf = BytesMut::from(data);
             buf.put_u8(CompressOptions::Uncompress.into());
             Ok(buf.freeze())
-        },
+        }
         CompressOptions::Snappy => snappy_encode(data),
-        CompressOptions::Lz4 => lz4_encode(data)
+        CompressOptions::Lz4 => lz4_encode(data),
     }
 }
 
@@ -112,28 +107,34 @@ pub fn decode(data: &[u8]) -> Result<Bytes> {
         CompressOptions::Lz4 => {
             let uncompressed = lz4::block::decompress(data, None)?;
             Ok(uncompressed.into())
-        },
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::block::{BlockBuilder, compress::CompressOptions};
+    use crate::block::{compress::CompressOptions, BlockBuilder};
 
-    use super::{encode, decode};
+    use super::{decode, encode};
 
     #[test]
     fn test_snappy() {
         let mut builder = BlockBuilder::new(2048);
         for i in 0..100 {
-            if !builder.add(format!("key_{}", i).as_bytes(), format!("value_{}", i).as_bytes()) {
+            if !builder.add(
+                format!("key_{}", i).as_bytes(),
+                format!("value_{}", i).as_bytes(),
+            ) {
                 break;
             }
         }
         let block = builder.build();
         let uncompress_size = block.uncompress_size();
         let compressed = block.encode(CompressOptions::Snappy).unwrap();
-        println!("uncompress_size: {uncompress_size}, snappy: {}", compressed.len());
+        println!(
+            "uncompress_size: {uncompress_size}, snappy: {}",
+            compressed.len()
+        );
         assert!(uncompress_size - compressed.len() > uncompress_size / 10)
     }
 
@@ -141,14 +142,20 @@ mod test {
     fn test_lz4() {
         let mut builder = BlockBuilder::new(2048);
         for i in 0..100 {
-            if !builder.add(format!("key_{}", i).as_bytes(), format!("value_{}", i).as_bytes()) {
+            if !builder.add(
+                format!("key_{}", i).as_bytes(),
+                format!("value_{}", i).as_bytes(),
+            ) {
                 break;
             }
         }
         let block = builder.build();
         let uncompress_size = block.uncompress_size();
         let compressed = block.encode(CompressOptions::Lz4).unwrap();
-        println!("uncompress_size: {uncompress_size}, lz4: {}", compressed.len());
+        println!(
+            "uncompress_size: {uncompress_size}, lz4: {}",
+            compressed.len()
+        );
         assert!(uncompress_size - compressed.len() > uncompress_size / 10)
     }
 

@@ -95,7 +95,6 @@ fn test_memtable_iter() {
     }
 }
 
-
 #[test]
 fn test_memtable_replay() {
     let dir = tempdir().unwrap();

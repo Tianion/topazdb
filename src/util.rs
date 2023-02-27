@@ -18,7 +18,7 @@ pub fn memtable_file_path(dir: impl AsRef<Path>, id: usize) -> PathBuf {
 mod test {
     use std::path::Path;
 
-    use super::{sstable_file_path, path_mem};
+    use super::{path_mem, sstable_file_path};
     #[test]
     fn test_path_sst() {
         let path = sstable_file_path(Path::new("./"), 1);

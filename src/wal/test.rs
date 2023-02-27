@@ -1,11 +1,8 @@
-
-
 use tempfile::TempDir;
 
 use crate::util::memtable_file_path;
 
 use super::Wal;
-
 
 #[test]
 fn test_replay() {
@@ -22,7 +19,7 @@ fn test_replay() {
         wal.add(key, value).unwrap();
     }
     drop(wal);
-    let wal = Wal::open   (memtable_file_path(dir.path(), 0)).unwrap();
+    let wal = Wal::open(memtable_file_path(dir.path(), 0)).unwrap();
     let mut iter = wal.iter().unwrap();
     for (key, value) in input {
         assert!(iter.is_valid());

@@ -1,10 +1,11 @@
 mod iterator;
 use anyhow::Result;
 
-use parking_lot::{Mutex};
+use parking_lot::Mutex;
 use std::{
     fs::{remove_file, File},
-    path::Path, io::{Write, Read, BufReader, BufWriter, Seek}
+    io::{BufReader, BufWriter, Read, Seek, Write},
+    path::Path,
 };
 
 use crate::block::Entry;
@@ -25,7 +26,6 @@ impl WalInner {
         } else {
             Err(anyhow::anyhow!("only read"))
         }
-        
     }
 
     fn read_all(&mut self) -> Result<Vec<u8>> {
@@ -38,24 +38,18 @@ impl WalInner {
             Err(anyhow::anyhow!("only read"))
         }
     }
-
-
-
 }
 
 #[allow(unused)]
 pub struct Wal {
-    inner: Mutex<WalInner>
+    inner: Mutex<WalInner>,
 }
 
 impl Wal {
-
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let file = File::options().read(true).open(path)?;
-        Ok(Wal { 
-            inner: Mutex::new(
-                WalInner::WalReader(BufReader::new(file))
-            )
+        Ok(Wal {
+            inner: Mutex::new(WalInner::WalReader(BufReader::new(file))),
         })
     }
 
@@ -64,10 +58,8 @@ impl Wal {
             remove_file(&path)?;
         }
         let file = File::options().create_new(true).append(true).open(path)?;
-        Ok(Wal { 
-            inner: Mutex::new(
-                WalInner::WalWriter(BufWriter::new(file))
-            )
+        Ok(Wal {
+            inner: Mutex::new(WalInner::WalWriter(BufWriter::new(file))),
         })
     }
 
@@ -78,12 +70,10 @@ impl Wal {
     }
 
     pub fn iter(&self) -> Result<WalIterator> {
-        
         let buf = self.inner.lock().read_all()?;
-        
+
         Ok(WalIterator::create(&buf))
     }
-
 }
 
 #[cfg(test)]

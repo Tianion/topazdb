@@ -27,15 +27,15 @@ use crate::{
         task::{Task, TaskPriority},
     },
     manifest::{Change, ManifestChangeSet, ManifestFile},
+    opt::LsmOptions,
     table::{FileObject, SsTable, SsTableBuilder, SsTableIterator},
-    util::sstable_file_path, opt::LsmOptions,
+    util::sstable_file_path,
 };
 
 const MAX_LEVEL: usize = 6;
 pub type BlockCache = moka::sync::Cache<(u64, usize), Arc<Block>>;
 
 // TODO: opt or update size
-
 
 struct LevelsControllerInner {
     next_sst_id: AtomicU64,
@@ -174,7 +174,7 @@ impl LevelsControllerInner {
         }
 
         let task = Arc::new(task.unwrap());
-        
+
         let rws = RwsSlice::create(&task);
         // TODO: 得到sub_compact线程数
         let num_sub_compact = 4;
@@ -242,7 +242,11 @@ impl LevelsControllerInner {
             }
 
             let id = self.next_sst_id.fetch_add(1, Ordering::Relaxed);
-            new_tables.push(Arc::new(build.build(id, None, sstable_file_path(&self.opt.dir, id))?));
+            new_tables.push(Arc::new(build.build(
+                id,
+                None,
+                sstable_file_path(&self.opt.dir, id),
+            )?));
         }
         Ok(new_tables)
     }
@@ -250,7 +254,11 @@ impl LevelsControllerInner {
     fn fill_table_l0(&self) -> Option<Task> {
         let this_tables = self.levels[0].read().clone();
         let next_tables = self.levels[1].read().clone();
-        let mut task = Task {this_level_id: 0, next_level_id: 1, ..Default::default()};
+        let mut task = Task {
+            this_level_id: 0,
+            next_level_id: 1,
+            ..Default::default()
+        };
 
         let mut this_compact_job = self.compact_job[0].lock();
         let mut next_compact_job = self.compact_job[1].lock();
@@ -311,7 +319,11 @@ impl LevelsControllerInner {
         this_tables.sort_by(|a, b| b.size.partial_cmp(&a.size).unwrap());
         let next_tables = self.levels[level + 1].read().clone();
 
-        let mut task = Task {this_level_id: level, next_level_id: level + 1, ..Default::default()};
+        let mut task = Task {
+            this_level_id: level,
+            next_level_id: level + 1,
+            ..Default::default()
+        };
 
         let mut this_compact_job = self.compact_job[level].lock();
         let mut next_compact_job = self.compact_job[level + 1].lock();
@@ -400,7 +412,7 @@ impl LevelsControllerInner {
                 .cloned()
                 .collect::<Vec<_>>();
             *level = new_level;
-        } 
+        }
 
         Ok(())
     }
@@ -425,14 +437,21 @@ fn build_change_set(task: &Task, new_tables: &[Arc<SsTable>]) -> ManifestChangeS
 pub struct LevelController {
     inner: Arc<LevelsControllerInner>,
     block_cache: Arc<BlockCache>,
-    opt: LsmOptions
+    opt: LsmOptions,
 }
 
 impl LevelController {
     pub fn open(opt: LsmOptions) -> Result<Self> {
         let block_cache = Arc::new(BlockCache::new(opt.block_cache_size));
-        let inner = Arc::new(LevelsControllerInner::new(opt.clone(), block_cache.clone())?);
-        Ok(Self { inner, block_cache, opt })
+        let inner = Arc::new(LevelsControllerInner::new(
+            opt.clone(),
+            block_cache.clone(),
+        )?);
+        Ok(Self {
+            inner,
+            block_cache,
+            opt,
+        })
     }
 
     pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
@@ -510,7 +529,7 @@ impl LevelController {
             };
 
             let ticker = tick(Duration::from_millis(50));
-            
+
             loop {
                 ticker.recv().unwrap();
                 run_once();

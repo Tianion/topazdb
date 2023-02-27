@@ -1,6 +1,4 @@
-use bytes::{Bytes, Buf};
-
-
+use bytes::{Buf, Bytes};
 
 pub struct WalIterator {
     data: Bytes,
@@ -9,9 +7,12 @@ pub struct WalIterator {
 }
 
 impl WalIterator {
-
     pub fn create(buf: &[u8]) -> Self {
-        let mut iter = WalIterator { data: Bytes::copy_from_slice(buf), key: vec![], value: vec![] };
+        let mut iter = WalIterator {
+            data: Bytes::copy_from_slice(buf),
+            key: vec![],
+            value: vec![],
+        };
         iter.next();
         iter
     }
@@ -42,5 +43,4 @@ impl WalIterator {
         self.value = self.data[..vlen].to_vec();
         self.data.advance(vlen);
     }
-
 }

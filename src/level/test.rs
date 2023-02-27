@@ -4,8 +4,10 @@ use bytes::Bytes;
 use tempfile::TempDir;
 
 use crate::{
+    block::CompressOptions,
+    opt::LsmOptions,
     table::{SsTable, SsTableBuilder},
-    util::sstable_file_path, opt::LsmOptions, block::CompressOptions,
+    util::sstable_file_path,
 };
 
 use super::{
