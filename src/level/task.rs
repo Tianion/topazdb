@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::table::SsTable;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TaskPriority {
     pub level: usize,
     pub score: f64,
@@ -15,7 +15,7 @@ impl TaskPriority {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Task {
     pub this_level_id: usize,
     pub next_level_id: usize,

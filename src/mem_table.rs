@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::fs;
 use std::ops::Bound;
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -79,6 +80,7 @@ impl MemTables {
 
     pub fn use_new_table(&mut self) -> Result<()> {
         let table = Arc::new(MemTable::create(&self.opt.dir, self.next_mem_id)?);
+        self.next_mem_id += 1;
         let memtable = std::mem::replace(&mut self.memtable, table);
         self.imm_memtables.push_back(memtable);
         Ok(())
@@ -93,6 +95,7 @@ impl MemTables {
 /// A basic mem-table based on crossbeam-skiplist
 pub struct MemTable {
     map: Arc<SkipMap<Bytes, Bytes>>,
+    size: AtomicUsize,
     wal: Wal,
 }
 
@@ -102,6 +105,7 @@ impl MemTable {
         Ok(Self {
             map: Arc::new(SkipMap::new()),
             wal: Wal::create(memtable_file_path(path, id))?,
+            size: AtomicUsize::new(0),
         })
     }
 
@@ -109,16 +113,19 @@ impl MemTable {
         let wal = Wal::open(memtable_file_path(path, id))?;
         let mut iter = wal.iter()?;
         let map = SkipMap::new();
+        let mut size = 0;
+
         while iter.is_valid() {
-            map.insert(
-                Bytes::copy_from_slice(iter.key()),
-                Bytes::copy_from_slice(iter.value()),
-            );
+            let key = Bytes::copy_from_slice(iter.key());
+            let value = Bytes::copy_from_slice(iter.value());
+            size += key.len() + value.len();
+            map.insert(key, value);
             iter.next();
         }
         Ok(Self {
             map: map.into(),
             wal,
+            size: AtomicUsize::new(size),
         })
     }
 
@@ -129,7 +136,7 @@ impl MemTable {
     }
 
     pub fn size(&self) -> usize {
-        self.map.len()
+        self.size.load(Ordering::Relaxed)
     }
 
     /// Get a value by key.
@@ -140,8 +147,22 @@ impl MemTable {
     /// Put a key-value pair into the mem-table.
     fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
         self.wal.add(key, value)?;
+        let old_size = self
+            .map
+            .get(key)
+            .map(|entry| entry.key().len() + entry.value().len())
+            .unwrap_or(0);
         self.map
             .insert(Bytes::copy_from_slice(key), Bytes::copy_from_slice(value));
+
+        if key.len() + value.len() >= old_size {
+            let add = key.len() + value.len() - old_size;
+            self.size.fetch_add(add, Ordering::Relaxed);
+        } else {
+            let sub = old_size - key.len() + value.len();
+            self.size.fetch_sub(sub, Ordering::Relaxed);
+        }
+
         Ok(())
     }
 

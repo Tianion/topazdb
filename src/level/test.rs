@@ -44,16 +44,18 @@ fn generate_sst(
 fn create_ranges() {
     let dir = TempDir::new().unwrap();
     let path = dir.path();
-    let mut task = Task::default();
-    task.this_level_id = 0;
-    task.next_level_id = 1;
+    let mut task = Task {
+        this_level_id: 0,
+        next_level_id: 1,
+        ..Default::default()
+    };
     for i in 0..3 {
-        let table = generate_sst(i * 20, i * 50 + 50, i as u64, &path, "l0");
+        let table = generate_sst(i * 20, i * 50 + 50, i as u64, path, "l0");
         task.this_tables.push(Arc::new(table));
     }
     for i in 4..9 {
         let i = i - 4;
-        let table = generate_sst(i * 50, (i + 1) * 50, i as u64, &path, "l1");
+        let table = generate_sst(i * 50, (i + 1) * 50, i as u64, path, "l1");
         task.next_tables.push(Arc::new(table));
     }
     let rws = RwsSlice::create(&task);

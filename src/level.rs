@@ -16,7 +16,7 @@ use std::{
 use anyhow::{Ok, Result};
 use bytes::Bytes;
 use crossbeam_channel::{tick, unbounded};
-use log::info;
+use log::{error, info};
 use parking_lot::{Mutex, RwLock};
 
 use crate::{
@@ -53,12 +53,22 @@ impl LevelsControllerInner {
         }
         base_byte
     }
+
+    fn max_level_file(&self, level: usize) -> usize {
+        let file_size_base = self.opt.max_bytes_for_level_base / self.opt.target_file_size_base;
+        let mut num = file_size_base;
+        for _ in 1..=level {
+            num *= file_size_base;
+        }
+        num
+    }
+
     fn new(opt: LsmOptions, block_cache: Arc<BlockCache>) -> Result<Self> {
         let path = &opt.dir;
         let (manifest, l0_ids) = ManifestFile::open(path)?;
         let id_level = manifest.get_id_level();
         let next_sst_id = AtomicU64::new(id_level.keys().copied().max().unwrap_or(0));
-        let mut levels = vec![vec![]; MAX_LEVEL];
+        let mut levels = vec![vec![]; opt.num_levels];
 
         for id in l0_ids {
             if id_level.contains_key(&id) {
@@ -108,7 +118,9 @@ impl LevelsControllerInner {
 
         for i in 0..self.levels.len() {
             let size = self.level_size(i);
-            let pri = TaskPriority::new(i, size as f64 / self.max_level_byte(i) as f64);
+            let size_score = size as f64 / self.max_level_byte(i) as f64;
+            let num_score = self.levels[i].read().len() as f64 / self.max_level_file(i) as f64;
+            let pri = TaskPriority::new(i, size_score.max(num_score));
             prios.push(pri);
         }
 
@@ -169,6 +181,9 @@ impl LevelsControllerInner {
         // TODO: 如果是level 判断是否要走l0的tired compaction
 
         let task = self.create_task(pri.level);
+
+        info!("compactor {idx} creates task {}", task.is_some());
+
         if task.is_none() {
             return Ok(());
         }
@@ -517,18 +532,22 @@ impl LevelController {
                 if idx == 0 {
                     prios = move_l0_to_front(prios);
                 }
+
                 for p in prios {
                     if p.score < 1.0 {
                         break;
                     }
 
-                    if let Err(_err) = inner.do_compact(idx, p) {
+                    if let Err(err) = inner.do_compact(idx, p) {
+                        error!("compactor {idx} error: {err}")
                         // TODO: Handle error.
                     }
                 }
             };
 
             let ticker = tick(Duration::from_millis(50));
+
+            info!("compactor {idx} start");
 
             loop {
                 ticker.recv().unwrap();

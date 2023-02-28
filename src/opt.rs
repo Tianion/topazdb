@@ -10,7 +10,7 @@ pub struct LsmOptions {
     pub compactor_num: usize,         // default 4
     pub subcompactor_num: usize,      // default 4
     pub block_cache_size: u64,        // default 2GB
-    pub block_size: usize,            // default 4KB
+    pub block_size: usize,            // default 32KB
     pub memtable_size: usize,         // default 256MB
     pub max_memtable_num: usize,      // default 5
     pub min_memtable_to_merge: usize, // default 2

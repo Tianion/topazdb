@@ -53,7 +53,7 @@ impl LsmStorageInner {
 
                 let mut iter = MergeIterator::create(
                     memtables
-                        .into_iter()
+                        .iter()
                         .map(|x| Box::new(x.scan(Bound::Unbounded, Bound::Unbounded)))
                         .collect(),
                 );
@@ -62,11 +62,20 @@ impl LsmStorageInner {
                     SsTableBuilder::new(inner.opt.block_size, self.opt.compress_option);
 
                 while iter.is_valid() {
-                    builder.add(iter.key(), iter.value()).unwrap();
+                    builder.add(iter.key(), iter.value())?;
                     iter.next()?;
                 }
 
-                inner.lvctl.l0_push_sstable(builder)
+                inner.lvctl.l0_push_sstable(builder)?;
+                {
+                    let mut guard = inner.memtables.write();
+                    for _ in 0..memtables.len() {
+                        guard.imm_memtables.pop_front();
+                    }
+                }
+
+                info!("push l0 sstable");
+                Ok(())
             };
 
             let full_run = || {
@@ -152,6 +161,7 @@ impl LsmStorage {
                 // secondary check. try_write just reduces the number of lock acquirers
                 if guard.memtable.size() > self.opt.memtable_size {
                     guard.use_new_table()?;
+                    info!("use new memtable");
                 }
             }
         }
