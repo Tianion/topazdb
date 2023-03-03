@@ -129,12 +129,6 @@ impl MemTable {
         })
     }
 
-    #[cfg(test)]
-    pub(crate) fn create_for_test() -> MemTable {
-        use tempfile::TempDir;
-        Self::create(TempDir::new().unwrap().path(), 0).unwrap()
-    }
-
     pub fn size(&self) -> usize {
         self.size.load(Ordering::Relaxed)
     }

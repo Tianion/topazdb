@@ -56,14 +56,15 @@ fn generate_sst() -> (TempDir, SsTable) {
 
 #[test]
 fn test_sst_build_all() {
-    generate_sst();
+    let (_dir, table) = generate_sst();
 }
 
 #[test]
 fn test_sst_decode() {
     let (_dir, sst) = generate_sst();
     let meta = sst.block_metas.clone();
-    let new_sst = SsTable::open_for_test(sst.file).unwrap();
+    let file = sst.file;
+    let new_sst = SsTable::open(0, None, file).unwrap();
     assert_eq!(new_sst.block_metas, meta);
 }
 

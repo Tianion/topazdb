@@ -18,9 +18,10 @@ fn test_replay() {
     for (key, value) in &input {
         wal.add(key, value).unwrap();
     }
+    wal.save_file();
     drop(wal);
-    let wal = Wal::open(memtable_file_path(dir.path(), 0)).unwrap();
-    let mut iter = wal.iter().unwrap();
+    let r_wal = Wal::open(memtable_file_path(dir.path(), 0)).unwrap();
+    let mut iter = r_wal.iter().unwrap();
     for (key, value) in input {
         assert!(iter.is_valid());
         assert_eq!(iter.key(), key);

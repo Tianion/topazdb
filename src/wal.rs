@@ -5,7 +5,8 @@ use parking_lot::Mutex;
 use std::{
     fs::{remove_file, File},
     io::{BufReader, BufWriter, Read, Seek, Write},
-    path::Path,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use crate::block::Entry;
@@ -24,7 +25,7 @@ impl WalInner {
             writer.flush()?;
             Ok(())
         } else {
-            Err(anyhow::anyhow!("only read"))
+            Err(anyhow::anyhow!("only write"))
         }
     }
 
@@ -40,26 +41,35 @@ impl WalInner {
     }
 }
 
-#[allow(unused)]
 pub struct Wal {
     inner: Mutex<WalInner>,
+    path: PathBuf,
+    remove_file: AtomicBool,
 }
 
 impl Wal {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        let file = File::options().read(true).open(path)?;
+        let file = File::options().read(true).open(&path)?;
         Ok(Wal {
             inner: Mutex::new(WalInner::WalReader(BufReader::new(file))),
+            path: path.as_ref().to_path_buf(),
+            remove_file: AtomicBool::new(true),
         })
+    }
+
+    pub fn save_file(&self) {
+        self.remove_file.store(false, Ordering::Relaxed)
     }
 
     pub fn create(path: impl AsRef<Path>) -> Result<Self> {
         if path.as_ref().exists() {
             remove_file(&path)?;
         }
-        let file = File::options().create_new(true).append(true).open(path)?;
+        let file = File::options().create_new(true).append(true).open(&path)?;
         Ok(Wal {
             inner: Mutex::new(WalInner::WalWriter(BufWriter::new(file))),
+            path: path.as_ref().to_path_buf(),
+            remove_file: AtomicBool::new(true),
         })
     }
 
@@ -73,6 +83,14 @@ impl Wal {
         let buf = self.inner.lock().read_all()?;
 
         Ok(WalIterator::create(&buf))
+    }
+}
+
+impl Drop for Wal {
+    fn drop(&mut self) {
+        if self.remove_file.load(Ordering::Relaxed) {
+            remove_file(&self.path).unwrap();
+        }
     }
 }
 

@@ -54,8 +54,8 @@ fn create_ranges() {
         task.this_tables.push(Arc::new(table));
     }
     for i in 4..9 {
-        let i = i - 4;
-        let table = generate_sst(i * 50, (i + 1) * 50, i as u64, path, "l1");
+        let j = i - 4;
+        let table = generate_sst(j * 50, (j + 1) * 50, i as u64, path, "l1");
         task.next_tables.push(Arc::new(table));
     }
     let rws = RwsSlice::create(&task);
@@ -192,6 +192,7 @@ fn get_key_drop() {
         builder.add(&key_of(i), &value_of(i, "")).unwrap();
     }
     lvctl.l0_push_sstable(builder).unwrap();
+    lvctl.mark_save();
     drop(lvctl);
     let lvctl = lvctl_new(&dir);
     for i in 0..10 {
@@ -219,6 +220,7 @@ fn generate_lvctl(path: impl AsRef<Path>) -> (LevelController, BTreeMap<Bytes, B
 fn open_drop() {
     let dir = TempDir::new().unwrap();
     let (lvctl, map) = generate_lvctl(dir.path());
+    lvctl.mark_save();
     drop(lvctl);
     let lvctl = lvctl_new(&dir);
     for (key, val) in map.iter() {

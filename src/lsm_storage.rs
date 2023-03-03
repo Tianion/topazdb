@@ -247,3 +247,11 @@ impl LsmStorage {
         Ok(FusedIterator::new(LsmIterator::new(iter, end)?))
     }
 }
+
+impl Drop for LsmStorage {
+    fn drop(&mut self) {
+        self.sync().unwrap();
+        self.inner.lvctl.mark_save();
+        // TODO: thread stop. We should use a threadpool
+    }
+}

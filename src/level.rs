@@ -568,6 +568,15 @@ impl LevelController {
         Ok(())
     }
 
+    pub fn mark_save(&self) {
+        for level in &self.inner.levels {
+            let mut guard = level.write();
+            for table in guard.iter_mut() {
+                table.mark_save();
+            }
+        }
+    }
+
     pub fn level_tables_sorted(
         &self,
         lower: Bound<&[u8]>,

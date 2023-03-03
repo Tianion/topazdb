@@ -4,8 +4,9 @@
 mod builder;
 mod iterator;
 
-use std::fs::{self, File};
-use std::path::Path;
+use std::fs::{self, remove_file, File};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Ok, Result};
@@ -64,6 +65,8 @@ impl BlockMeta {
 pub struct FileObject {
     fs: File,
     size: usize,
+    file_name: PathBuf,
+    remove_file: AtomicBool,
 }
 
 impl FileObject {
@@ -83,14 +86,29 @@ impl FileObject {
         fs::write(path.as_ref(), &data)?;
         Ok(FileObject {
             size: data.len(),
+            file_name: path.as_ref().to_path_buf(),
             fs: File::options().read(true).open(path)?,
+            remove_file: AtomicBool::new(true),
         })
     }
 
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        let fs = File::options().read(true).open(path)?;
+        let fs = File::options().read(true).open(&path)?;
         let size = fs.metadata()?.len() as usize;
-        Ok(Self { fs, size })
+        Ok(Self {
+            fs,
+            size,
+            file_name: path.as_ref().to_path_buf(),
+            remove_file: AtomicBool::new(true),
+        })
+    }
+}
+
+impl Drop for FileObject {
+    fn drop(&mut self) {
+        if self.remove_file.load(Ordering::Relaxed) {
+            remove_file(&self.file_name).unwrap();
+        }
     }
 }
 
@@ -107,11 +125,6 @@ pub struct SsTable {
 }
 
 impl SsTable {
-    #[cfg(test)]
-    pub(crate) fn open_for_test(file: FileObject) -> Result<Self> {
-        Self::open(0, None, file)
-    }
-
     /// Open SSTable from a file.
     pub fn open(id: u64, block_cache: Option<Arc<BlockCache>>, file: FileObject) -> Result<Self> {
         let size = file.size();
@@ -133,6 +146,10 @@ impl SsTable {
         };
         table.init_samllest_biggest_key()?;
         Ok(table)
+    }
+
+    pub(crate) fn mark_save(&self) {
+        self.file.remove_file.store(false, Ordering::Relaxed);
     }
 
     // calculate accurate size is expensive

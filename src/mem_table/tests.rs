@@ -1,13 +1,19 @@
-use tempfile::tempdir;
+use tempfile::{tempdir, TempDir};
 
 use super::MemTable;
 use crate::block::CompressOptions;
 use crate::iterators::StorageIterator;
 use crate::table::{SsTableBuilder, SsTableIterator};
 
+fn create_for_test() -> (TempDir, MemTable) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().to_path_buf();
+    (dir, MemTable::create(path, 0).unwrap())
+}
+
 #[test]
 fn test_memtable_get() {
-    let memtable = MemTable::create_for_test();
+    let (_dir, memtable) = create_for_test();
     memtable.put(b"key1", b"value1").unwrap();
     memtable.put(b"key2", b"value2").unwrap();
     memtable.put(b"key3", b"value3").unwrap();
@@ -18,7 +24,7 @@ fn test_memtable_get() {
 
 #[test]
 fn test_memtable_overwrite() {
-    let memtable = MemTable::create_for_test();
+    let (_dir, memtable) = create_for_test();
     memtable.put(b"key1", b"value1").unwrap();
     memtable.put(b"key2", b"value2").unwrap();
     memtable.put(b"key3", b"value3").unwrap();
@@ -32,7 +38,7 @@ fn test_memtable_overwrite() {
 
 #[test]
 fn test_memtable_flush() {
-    let memtable = MemTable::create_for_test();
+    let (_dir, memtable) = create_for_test();
     memtable.put(b"key1", b"value1").unwrap();
     memtable.put(b"key2", b"value2").unwrap();
     memtable.put(b"key3", b"value3").unwrap();
@@ -56,7 +62,7 @@ fn test_memtable_flush() {
 #[test]
 fn test_memtable_iter() {
     use std::ops::Bound;
-    let memtable = MemTable::create_for_test();
+    let (_dir, memtable) = create_for_test();
     memtable.put(b"key1", b"value1").unwrap();
     memtable.put(b"key2", b"value2").unwrap();
     memtable.put(b"key3", b"value3").unwrap();
@@ -102,6 +108,7 @@ fn test_memtable_replay() {
     memtable.put(b"key1", b"value1").unwrap();
     memtable.put(b"key2", b"value2").unwrap();
     memtable.put(b"key3", b"value3").unwrap();
+    memtable.wal.save_file();
     drop(memtable);
     let memtable = MemTable::open(dir.path(), 1).unwrap();
     assert_eq!(&memtable.get(b"key1").unwrap()[..], b"value1");
