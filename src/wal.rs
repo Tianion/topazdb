@@ -1,6 +1,7 @@
 mod iterator;
 use anyhow::Result;
 
+use log::debug;
 use parking_lot::Mutex;
 use std::{
     fs::{remove_file, File},
@@ -48,6 +49,7 @@ pub struct Wal {
 }
 
 impl Wal {
+    /// open a file(only-read)
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let file = File::options().read(true).open(&path)?;
         Ok(Wal {
@@ -61,6 +63,7 @@ impl Wal {
         self.remove_file.store(false, Ordering::Relaxed)
     }
 
+    /// create a file(only-write)
     pub fn create(path: impl AsRef<Path>) -> Result<Self> {
         if path.as_ref().exists() {
             remove_file(&path)?;
@@ -88,6 +91,7 @@ impl Wal {
 
 impl Drop for Wal {
     fn drop(&mut self) {
+        debug!("{:?} begin drop", self.path);
         if self.remove_file.load(Ordering::Relaxed) {
             remove_file(&self.path).unwrap();
         }

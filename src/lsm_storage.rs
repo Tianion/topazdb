@@ -2,15 +2,15 @@ use std::collections::BTreeMap;
 use std::ops::Bound;
 
 use std::sync::Arc;
-use std::thread::spawn;
 use std::time::Duration;
 
 use anyhow::{Ok, Result};
 use bytes::Bytes;
 
-use crossbeam_channel::{select, tick};
-use log::{error, info};
+use crossbeam_channel::{select, tick, Receiver, Sender};
+use log::{debug, error, info};
 use parking_lot::{Mutex, RwLock};
+use yatp::task::callback::{Handle, TaskCell};
 
 use crate::block::CompressOptions;
 use crate::iterators::merge_iterator::MergeIterator;
@@ -38,9 +38,10 @@ impl LsmStorageInner {
         })
     }
 
-    fn start_flush(self: Arc<Self>) {
+    //TODO: channel send task
+    fn start_flush(self: Arc<Self>, pool: Arc<ThreadPool>, closer: Arc<Receiver<()>>) {
         let inner = self.clone();
-        spawn(move || {
+        pool.spawn(move |_: &mut Handle| {
             let run_once = || -> Result<()> {
                 let mut imm_memtable = inner.memtables.read().imm_memtables.clone();
                 if imm_memtable.len() < inner.opt.min_memtable_to_merge {
@@ -92,6 +93,7 @@ impl LsmStorageInner {
                 if let Err(e) = select! {
                     recv(ticker_run) -> _ => run_once(),
                     recv(ticker_check) -> _ => full_run(),
+                    recv(closer) -> _ => break,
                 } {
                     // TODO: err handling
                     error!("error {}", e)
@@ -101,23 +103,41 @@ impl LsmStorageInner {
     }
 }
 
+pub type ThreadPool = yatp::ThreadPool<TaskCell>;
+
 /// The storage interface of the LSM tree.
 pub struct LsmStorage {
     inner: Arc<LsmStorageInner>,
-    #[allow(dead_code)]
     opt: LsmOptions,
+    closer: Option<Sender<()>>,
+    pool: Arc<ThreadPool>,
     flush_lock: Mutex<()>,
 }
 
 impl LsmStorage {
     pub fn open(opt: LsmOptions) -> Result<Self> {
+        let pool = yatp::Builder::new("topazdb")
+            .max_thread_count(opt.compactor_num * 6 + 2)
+            .min_thread_count(opt.compactor_num * 4 + 2)
+            .build_callback_pool();
+
+        let pool = Arc::new(pool);
+
         let inner = Arc::new(LsmStorageInner::create(opt.clone())?);
-        inner.lvctl.start_compact();
+
+        let (sender, receiver) = crossbeam_channel::unbounded();
+
+        let receiver = Arc::new(receiver);
+        inner.lvctl.start_compact(pool.clone(), receiver.clone());
+
         let flush_core = inner.clone();
-        flush_core.start_flush();
+        flush_core.start_flush(pool.clone(), receiver);
+
         Ok(Self {
             inner,
             flush_lock: Mutex::new(()),
+            closer: Some(sender),
+            pool,
             opt,
         })
     }
@@ -154,6 +174,7 @@ impl LsmStorage {
         assert!(!key.is_empty(), "key cannot be empty");
         self.do_put(key, b"")
     }
+
     fn do_put(&self, key: &[u8], value: &[u8]) -> Result<()> {
         self.inner.memtables.read().put(key, value)?;
         if self.inner.memtables.read().memtable.size() > self.opt.memtable_size {
@@ -161,7 +182,7 @@ impl LsmStorage {
                 // secondary check. try_write just reduces the number of lock acquirers
                 if guard.memtable.size() > self.opt.memtable_size {
                     guard.use_new_table()?;
-                    info!("use new memtable");
+                    debug!("use new memtable");
                 }
             }
         }
@@ -172,15 +193,14 @@ impl LsmStorage {
     pub fn sync(&self) -> Result<()> {
         let _lock = self.flush_lock.lock();
 
-        let len = {
-            let mut guard = self.inner.memtables.write();
-            guard.use_new_table()?;
-            guard.imm_memtables.len()
-        };
+        let mut guard = self.inner.memtables.write();
+        guard.use_new_table()?;
+
+        let len = guard.imm_memtables.len();
 
         let mut map = BTreeMap::new();
         for i in 0..len {
-            let table = self.inner.memtables.read().imm_memtables[i].clone();
+            let table = guard.imm_memtables[i].clone();
             let mut iter = table.scan(Bound::Unbounded, Bound::Unbounded);
             while iter.is_valid() {
                 map.insert(iter.key().to_vec(), iter.value().to_vec());
@@ -188,18 +208,15 @@ impl LsmStorage {
             }
         }
 
-        let mut builder = SsTableBuilder::new(4096, CompressOptions::Uncompress);
+        let mut builder = SsTableBuilder::new(self.opt.block_size, CompressOptions::Uncompress);
         for (key, value) in &map {
             builder.add(key, value).unwrap();
         }
 
         self.inner.lvctl.l0_push_sstable(builder)?;
 
-        {
-            let mut guard = self.inner.memtables.write();
-            for _ in 0..len {
-                guard.imm_memtables.pop_front().unwrap();
-            }
+        for _ in 0..len {
+            guard.imm_memtables.pop_front().unwrap();
         }
 
         Ok(())
@@ -250,8 +267,9 @@ impl LsmStorage {
 
 impl Drop for LsmStorage {
     fn drop(&mut self) {
+        self.closer.take();
+        self.pool.shutdown();
         self.sync().unwrap();
         self.inner.lvctl.mark_save();
-        // TODO: thread stop. We should use a threadpool
     }
 }

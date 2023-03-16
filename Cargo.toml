@@ -6,22 +6,23 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1"
-arc-swap = "1"
-bytes = "1"
-crossbeam-epoch = "0.9"
-crossbeam-skiplist = "0.1"
+anyhow = "*"
+bytes = "*"
+crossbeam-skiplist = "*"
 crossbeam-channel = "*"
-parking_lot = "0.12"
-ouroboros = "0.15"
-moka = "0.10"
-log = "0.4.17"
-snap = "1"
-lz4 = "1"
+parking_lot = "*"
+ouroboros = "*"
+moka = "*"
+log = "*"
+snap = "*"
+lz4 = "*"
+# rayon thread pool doesn't support shutting down
+# rayon = "*"
+yatp = {git = "https://github.com/tikv/yatp"}
 
 [dev-dependencies]
-tempfile = "3"
-criterion = "0.4"
+tempfile = "*"
+criterion = "*"
 
 [[bench]]
 name = "sstable_read"

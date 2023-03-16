@@ -1,6 +1,4 @@
 mod range;
-#[allow(unused)]
-#[allow(dead_code)]
 mod task;
 use std::{
     collections::HashSet,
@@ -9,15 +7,15 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    thread::spawn,
     time::Duration,
 };
 
 use anyhow::{Ok, Result};
 use bytes::Bytes;
-use crossbeam_channel::{tick, unbounded};
+use crossbeam_channel::{select, tick, unbounded, Receiver};
 use log::{error, info};
 use parking_lot::{Mutex, RwLock};
+use yatp::task::callback::Handle;
 
 use crate::{
     block::Block,
@@ -26,6 +24,7 @@ use crate::{
         range::RwsSlice,
         task::{Task, TaskPriority},
     },
+    lsm_storage::ThreadPool,
     manifest::{Change, ManifestChangeSet, ManifestFile},
     opt::LsmOptions,
     table::{FileObject, SsTable, SsTableBuilder, SsTableIterator},
@@ -508,13 +507,13 @@ impl LevelController {
         Ok(None)
     }
 
-    pub fn start_compact(&self) {
+    pub fn start_compact(&self, pool: Arc<ThreadPool>, closer: Arc<Receiver<()>>) {
         for i in 0..self.opt.compactor_num {
-            self.run_compactor(i);
+            self.run_compactor(i, pool.clone(), closer.clone());
         }
     }
 
-    fn run_compactor(&self, idx: usize) {
+    fn run_compactor(&self, idx: usize, pool: Arc<ThreadPool>, closer: Arc<Receiver<()>>) {
         let inner = self.inner.clone();
         let move_l0_to_front =
             |prios: Vec<TaskPriority>| match prios.iter().position(|x| x.level == 0) {
@@ -526,7 +525,7 @@ impl LevelController {
                 }
                 _ => prios,
             };
-        spawn(move || {
+        pool.spawn(move |_: &mut Handle| {
             let run_once = || {
                 let mut prios = inner.pick_compact_levels();
                 if idx == 0 {
@@ -550,8 +549,10 @@ impl LevelController {
             info!("compactor {idx} start");
 
             loop {
-                ticker.recv().unwrap();
-                run_once();
+                select! {
+                    recv(ticker) -> _ => run_once(),
+                    recv(closer) -> _ => break,
+                };
             }
         });
     }
