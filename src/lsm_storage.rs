@@ -176,14 +176,17 @@ impl LsmStorage {
     }
 
     fn do_put(&self, key: &[u8], value: &[u8]) -> Result<()> {
-        self.inner.memtables.read().put(key, value)?;
-        if self.inner.memtables.read().memtable.size() > self.opt.memtable_size {
-            if let Some(mut guard) = self.inner.memtables.try_write() {
-                // secondary check. try_write just reduces the number of lock acquirers
-                if guard.memtable.size() > self.opt.memtable_size {
-                    guard.use_new_table()?;
-                    debug!("use new memtable");
-                }
+        let size = {
+            let guard = self.inner.memtables.read();
+            guard.put(key, value)?;
+            guard.memtable.size()
+        };
+        if size > self.opt.memtable_size {
+            let mut guard = self.inner.memtables.write();
+            // secondary check
+            if guard.memtable.size() > self.opt.memtable_size {
+                guard.use_new_table()?;
+                debug!("use new memtable");
             }
         }
         Ok(())
