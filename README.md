@@ -17,13 +17,13 @@ A persistent key-value storage in rust, based on LSM tree.
   - [ ] Checksum
     - [ ] Block
     - [ ] Sst 
-  - [ ] Block Compress 
+  - [x] Block Compress 
   - [x] Block Cache
   - [ ] Write Batch
   - [ ] Align blocks to 4K 
   - [ ] Bloom Filter
-  - [ ] Graceful Shutdown and Cleanup
-  - [ ] Compact Options
+  - [x] Graceful Shutdown and Cleanup
+  - [x] Compact Options
 - [ ] More test
   - [ ] Bench Test
   - [ ] Shutdown Test
