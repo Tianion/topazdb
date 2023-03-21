@@ -5,6 +5,7 @@ use tempfile::{tempdir, TempDir};
 use topazdb::{
     block::CompressOptions,
     iterators::StorageIterator,
+    opt::LsmOptions,
     table::{SsTable, SsTableBuilder, SsTableIterator},
 };
 
@@ -21,7 +22,8 @@ fn num_of_keys() -> usize {
 }
 
 fn generate_sst(compress_option: CompressOptions) -> (TempDir, SsTable) {
-    let mut builder = SsTableBuilder::new(256, compress_option);
+    let opt = LsmOptions { compress_option, ..Default::default() };
+    let mut builder = SsTableBuilder::new(opt);
     for idx in 0..num_of_keys() {
         let key = key_of(idx);
         let value = value_of(idx);

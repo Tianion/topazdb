@@ -4,13 +4,13 @@ use bytes::Bytes;
 use tempfile::{tempdir, TempDir};
 
 use super::*;
-use crate::block::CompressOptions;
 use crate::iterators::StorageIterator;
+use crate::opt::LsmOptions;
 use crate::table::SsTableBuilder;
 
 #[test]
 fn test_sst_build_single_key() {
-    let mut builder = SsTableBuilder::new(16, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(16));
     builder.add(b"233", b"233333").unwrap();
     let dir = tempdir().unwrap();
     builder.build_for_test(dir.path().join("1.sst")).unwrap();
@@ -18,7 +18,7 @@ fn test_sst_build_single_key() {
 
 #[test]
 fn test_sst_build_two_blocks() {
-    let mut builder = SsTableBuilder::new(16, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(16));
     builder.add(b"11", b"11").unwrap();
     builder.add(b"22", b"22").unwrap();
     builder.add(b"33", b"11").unwrap();
@@ -43,7 +43,7 @@ fn num_of_keys() -> usize {
 }
 
 fn generate_sst() -> (TempDir, SsTable) {
-    let mut builder = SsTableBuilder::new(128, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(128));
     for idx in 0..num_of_keys() {
         let key = key_of(idx);
         let value = value_of(idx);

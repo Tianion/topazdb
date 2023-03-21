@@ -1,8 +1,9 @@
 use tempfile::{tempdir, TempDir};
 
 use super::MemTable;
-use crate::block::CompressOptions;
+
 use crate::iterators::StorageIterator;
+use crate::opt::LsmOptions;
 use crate::table::{SsTableBuilder, SsTableIterator};
 
 fn create_for_test() -> (TempDir, MemTable) {
@@ -42,7 +43,7 @@ fn test_memtable_flush() {
     memtable.put(b"key1", b"value1").unwrap();
     memtable.put(b"key2", b"value2").unwrap();
     memtable.put(b"key3", b"value3").unwrap();
-    let mut builder = SsTableBuilder::new(128, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(128));
     memtable.flush(&mut builder).unwrap();
     let dir = tempdir().unwrap();
     let sst = builder.build_for_test(dir.path().join("1.sst")).unwrap();

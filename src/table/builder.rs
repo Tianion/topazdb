@@ -6,9 +6,10 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use super::{BlockMeta, FileObject, SsTable};
 use crate::block::BlockBuilder;
-use crate::block::CompressOptions;
+
 use crate::block::SIZEOF_U16;
 use crate::level::BlockCache;
+use crate::opt::LsmOptions;
 
 /// Builds an SSTable from key-value pairs.
 pub struct SsTableBuilder {
@@ -17,22 +18,20 @@ pub struct SsTableBuilder {
     // current block builder
     block_builder: BlockBuilder,
     base_key: Bytes,
-    block_size: usize,
-    compress_option: CompressOptions,
+    pub opt: LsmOptions,
 }
 
 const TABLE_CAPACITY: usize = 64 * 1024 * 1024;
 
 impl SsTableBuilder {
     /// Create a builder based on target block size.
-    pub fn new(block_size: usize, compress_option: CompressOptions) -> Self {
+    pub fn new(opt: LsmOptions) -> Self {
         Self {
             meta: vec![],
             data: BytesMut::new(),
-            block_builder: BlockBuilder::new(block_size),
+            block_builder: BlockBuilder::new(opt.block_size),
             base_key: Bytes::new(),
-            block_size,
-            compress_option,
+            opt,
         }
     }
 
@@ -51,10 +50,10 @@ impl SsTableBuilder {
     }
 
     fn block_build(&mut self) -> Result<()> {
-        let mut builder = BlockBuilder::new(self.block_size);
+        let mut builder = BlockBuilder::new(self.opt.block_size);
         std::mem::swap(&mut self.block_builder, &mut builder);
 
-        let byte = builder.build().encode(self.compress_option)?;
+        let byte = builder.build().encode(self.opt.compress_option)?;
         let mut key = Bytes::new();
         std::mem::swap(&mut key, &mut self.base_key);
 
@@ -89,7 +88,7 @@ impl SsTableBuilder {
         BlockMeta::encode_block_meta(&self.meta, &mut buf);
         self.data.put(buf.as_slice());
         self.data.put_u32(offset as u32);
-        let file = FileObject::create(path.as_ref(), self.data.to_vec())?;
+        let file = FileObject::create(path.as_ref(), &self.data, self.opt.o_direct)?;
         let mut sst = SsTable {
             id,
             size: file.size(),

@@ -23,6 +23,7 @@ pub struct LsmOptions {
     pub max_bytes_for_level_multiplier: usize, // default 10
     pub num_levels: usize,               // default 6
     pub compress_option: CompressOptions,
+    pub o_direct: bool,
 }
 
 impl Default for LsmOptions {
@@ -43,13 +44,19 @@ impl Default for LsmOptions {
             max_bytes_for_level_multiplier: 10,
             num_levels: 6,
             compress_option: CompressOptions::Snappy,
+            o_direct: false,
         }
     }
 }
 
 impl LsmOptions {
-    pub fn set_path(mut self, path: impl AsRef<Path>) -> Self {
+    pub fn path(mut self, path: impl AsRef<Path>) -> Self {
         self.dir = path.as_ref().to_path_buf();
+        self
+    }
+
+    pub fn block_size(mut self, block_size: usize) -> Self {
+        self.block_size = block_size;
         self
     }
 

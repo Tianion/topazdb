@@ -2,17 +2,15 @@
 #![allow(dead_code)] // TODO(you): remove this lint after implementing this mod
 
 mod builder;
+mod file_object;
 mod iterator;
-
-use std::fs::{self, remove_file, File};
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 use anyhow::{anyhow, Ok, Result};
 pub use builder::SsTableBuilder;
 use bytes::{Buf, BufMut, Bytes};
+pub use file_object::FileObject;
 pub use iterator::SsTableIterator;
+use std::sync::Arc;
 
 use crate::block::{Block, BlockIterator, SIZEOF_U16};
 use crate::level::BlockCache;
@@ -60,58 +58,6 @@ impl BlockMeta {
     }
 }
 
-/// A file object.
-#[derive(Debug)]
-pub struct FileObject {
-    fs: File,
-    size: usize,
-    file_name: PathBuf,
-    remove_file: AtomicBool,
-}
-
-impl FileObject {
-    pub fn read(&self, offset: usize, len: usize) -> Result<Vec<u8>> {
-        use std::os::unix::fs::FileExt;
-        let mut buf = vec![0; len];
-        self.fs.read_exact_at(&mut buf, offset as u64)?;
-        Ok(buf)
-    }
-
-    pub fn size(&self) -> usize {
-        self.size
-    }
-
-    /// Create a new file object and write the file to the disk .
-    pub fn create(path: impl AsRef<Path>, data: Vec<u8>) -> Result<Self> {
-        fs::write(path.as_ref(), &data)?;
-        Ok(FileObject {
-            size: data.len(),
-            file_name: path.as_ref().to_path_buf(),
-            fs: File::options().read(true).open(path)?,
-            remove_file: AtomicBool::new(true),
-        })
-    }
-
-    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        let fs = File::options().read(true).open(&path)?;
-        let size = fs.metadata()?.len() as usize;
-        Ok(Self {
-            fs,
-            size,
-            file_name: path.as_ref().to_path_buf(),
-            remove_file: AtomicBool::new(true),
-        })
-    }
-}
-
-impl Drop for FileObject {
-    fn drop(&mut self) {
-        if self.remove_file.load(Ordering::Relaxed) {
-            remove_file(&self.file_name).unwrap();
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct SsTable {
     pub id: u64,
@@ -149,7 +95,7 @@ impl SsTable {
     }
 
     pub(crate) fn mark_save(&self) {
-        self.file.remove_file.store(false, Ordering::Relaxed);
+        self.file.save()
     }
 
     // calculate accurate size is expensive

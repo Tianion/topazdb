@@ -12,7 +12,6 @@ use log::{debug, error, info};
 use parking_lot::{Mutex, RwLock};
 use yatp::task::callback::{Handle, TaskCell};
 
-use crate::block::CompressOptions;
 use crate::iterators::merge_iterator::MergeIterator;
 use crate::iterators::two_merge_iterator::TwoMergeIterator;
 use crate::iterators::StorageIterator;
@@ -59,8 +58,7 @@ impl LsmStorageInner {
                         .collect(),
                 );
 
-                let mut builder =
-                    SsTableBuilder::new(inner.opt.block_size, self.opt.compress_option);
+                let mut builder = SsTableBuilder::new(self.opt.clone());
 
                 while iter.is_valid() {
                     builder.add(iter.key(), iter.value())?;
@@ -211,7 +209,7 @@ impl LsmStorage {
             }
         }
 
-        let mut builder = SsTableBuilder::new(self.opt.block_size, CompressOptions::Uncompress);
+        let mut builder = SsTableBuilder::new(self.opt.clone());
         for (key, value) in &map {
             builder.add(key, value).unwrap();
         }

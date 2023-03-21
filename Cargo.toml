@@ -16,6 +16,7 @@ moka = "*"
 log = "*"
 snap = "*"
 lz4 = "*"
+libc = "*"
 # rayon thread pool doesn't support shutting down
 # rayon = "*"
 yatp = {git = "https://github.com/tikv/yatp"}

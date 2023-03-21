@@ -34,8 +34,6 @@ use crate::{
 const MAX_LEVEL: usize = 6;
 pub type BlockCache = moka::sync::Cache<(u64, usize), Arc<Block>>;
 
-// TODO: opt or update size
-
 struct LevelsControllerInner {
     next_sst_id: AtomicU64,
     levels: Vec<RwLock<Vec<Arc<SsTable>>>>,
@@ -71,7 +69,7 @@ impl LevelsControllerInner {
 
         for id in l0_ids {
             if id_level.contains_key(&id) {
-                let file = FileObject::open(&sstable_file_path(path, id))?;
+                let file = FileObject::open(&sstable_file_path(path, id), opt.o_direct)?;
                 let table = Arc::new(SsTable::open(id, Some(block_cache.clone()), file)?);
                 levels[0].push(table);
             }
@@ -81,7 +79,7 @@ impl LevelsControllerInner {
             if level == 0 {
                 continue;
             }
-            let file = FileObject::open(&sstable_file_path(path, id))?;
+            let file = FileObject::open(&sstable_file_path(path, id), opt.o_direct)?;
             let table = Arc::new(SsTable::open(id, Some(block_cache.clone()), file)?);
             levels[level].push(table);
         }
@@ -148,7 +146,7 @@ impl LevelsControllerInner {
 
         let mut iter = MergeIterator::create(iters);
 
-        let mut builder = SsTableBuilder::new(4096, self.opt.compress_option);
+        let mut builder = SsTableBuilder::new(self.opt.clone());
         while iter.is_valid() {
             builder.add(iter.key(), iter.value());
             iter.next()?;
@@ -248,7 +246,7 @@ impl LevelsControllerInner {
             }
         }
         while iter.is_valid() && key_vaild(&iter, &upper) {
-            let mut build = SsTableBuilder::new(4096, self.opt.compress_option);
+            let mut build = SsTableBuilder::new(self.opt.clone());
 
             while iter.is_valid() && !build.reach_capacity() && key_vaild(&iter, &upper) {
                 build.add(iter.key(), iter.value())?;

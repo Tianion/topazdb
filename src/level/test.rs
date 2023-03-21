@@ -4,7 +4,6 @@ use bytes::Bytes;
 use tempfile::TempDir;
 
 use crate::{
-    block::CompressOptions,
     opt::LsmOptions,
     table::{SsTable, SsTableBuilder},
     util::sstable_file_path,
@@ -31,7 +30,7 @@ fn generate_sst(
     path: impl AsRef<Path>,
     info: &str,
 ) -> SsTable {
-    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default());
     for idx in lower..upper {
         builder.add(&key_of(idx), &value_of(idx, info)).unwrap();
     }
@@ -112,14 +111,14 @@ fn ranges_split() {
 }
 
 fn lvctl_new(dir: &TempDir) -> LevelController {
-    LevelController::open(LsmOptions::default().set_path(dir.path())).unwrap()
+    LevelController::open(LsmOptions::default().path(dir.path())).unwrap()
 }
 
 #[test]
 fn get_simple_key() {
     let dir = TempDir::new().unwrap();
     let lvctl = lvctl_new(&dir);
-    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(64));
     for i in 0..10 {
         builder.add(&key_of(i), &value_of(i, "")).unwrap();
     }
@@ -134,7 +133,7 @@ fn get_simple_not_exist() {
     let dir = TempDir::new().unwrap();
     let lvctl = lvctl_new(&dir);
     assert_eq!(None, lvctl.get(b"aaaaa").unwrap());
-    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(64));
     for i in 0..10 {
         builder.add(&key_of(i), &value_of(i, "")).unwrap();
     }
@@ -145,13 +144,13 @@ fn get_simple_not_exist() {
 #[test]
 fn get_key_new_old() {
     let dir = TempDir::new().unwrap();
-    let lvctl = LevelController::open(LsmOptions::default().set_path(dir.path())).unwrap();
-    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
+    let lvctl = LevelController::open(LsmOptions::default().path(dir.path())).unwrap();
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(64));
     for i in 0..10 {
         builder.add(&key_of(i), &value_of(i, "old")).unwrap();
     }
     lvctl.l0_push_sstable(builder).unwrap();
-    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(64));
     for i in 0..10 {
         builder.add(&key_of(i), &value_of(i, "new")).unwrap();
     }
@@ -168,12 +167,12 @@ fn get_key_new_old() {
 fn get_key_delete() {
     let dir = TempDir::new().unwrap();
     let lvctl = lvctl_new(&dir);
-    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(64));
     for i in 0..10 {
         builder.add(&key_of(i), &value_of(i, "old")).unwrap();
     }
     lvctl.l0_push_sstable(builder).unwrap();
-    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(64));
     for i in 0..10 {
         builder.add(&key_of(i), b"").unwrap();
     }
@@ -187,7 +186,7 @@ fn get_key_delete() {
 fn get_key_drop() {
     let dir = TempDir::new().unwrap();
     let lvctl = lvctl_new(&dir);
-    let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(64));
     for i in 0..10 {
         builder.add(&key_of(i), &value_of(i, "")).unwrap();
     }
@@ -201,10 +200,10 @@ fn get_key_drop() {
 }
 
 fn generate_lvctl(path: impl AsRef<Path>) -> (LevelController, BTreeMap<Bytes, Bytes>) {
-    let lvctl = LevelController::open(LsmOptions::default().set_path(path)).unwrap();
+    let lvctl = LevelController::open(LsmOptions::default().path(path)).unwrap();
     let mut map = BTreeMap::new();
     for i in 0..10 {
-        let mut builder = SsTableBuilder::new(64, CompressOptions::Uncompress);
+        let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(64));
         for j in i * 50..i * 50 + 70 {
             let key = key_of(j);
             let val = value_of(j, &i.to_string());
