@@ -9,6 +9,7 @@ pub mod opt;
 pub mod table;
 pub mod util;
 pub mod wal;
+pub mod checksum;
 
 #[cfg(test)]
 mod tests;

@@ -9,6 +9,8 @@ pub use builder::Entry;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 pub use iterator::BlockIterator;
 
+use crate::checksum;
+
 pub use self::compress::CompressOptions;
 
 pub const SIZEOF_U16: usize = std::mem::size_of::<u16>();
@@ -36,11 +38,18 @@ impl Block {
         }
         buf.put(self.data.clone());
 
+        let checksum = checksum::calculate_checksum(&buf);
+        buf.put_u32(checksum);
         compress::encode(&buf, compress_option)
     }
 
     pub fn decode(data: &[u8]) -> Result<Self> {
-        let mut buf = compress::decode(data)?;
+        let mut data = compress::decode(data)?;
+
+        let mut buf = data.split_to(data.len() - 4);
+        
+        let checksum = data.get_u32();
+        checksum::verify_checksum(&buf, checksum)?;
 
         let num_element = buf.get_u16() as usize;
 
@@ -49,7 +58,7 @@ impl Block {
             offsets.push(buf.get_u16());
         }
 
-        Ok(Self { data: buf, offsets })
+        Ok(Self { data: buf.freeze(), offsets })
     }
 }
 

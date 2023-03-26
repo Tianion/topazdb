@@ -91,7 +91,7 @@ pub fn encode(data: &[u8], opt: CompressOptions) -> Result<Bytes> {
     }
 }
 
-pub fn decode(data: &[u8]) -> Result<Bytes> {
+pub fn decode(data: &[u8]) -> Result<BytesMut> {
     if data.is_empty() {
         return Err(anyhow::anyhow!("data is empty"));
     }
@@ -99,14 +99,14 @@ pub fn decode(data: &[u8]) -> Result<Bytes> {
     let data = &data[..data.len() - 1];
     match CompressOptions::from(option) {
         CompressOptions::Unkown => Err(anyhow::anyhow!("invaild data")),
-        CompressOptions::Uncompress => Ok(Bytes::copy_from_slice(data)),
+        CompressOptions::Uncompress => Ok(BytesMut::from(data)),
         CompressOptions::Snappy => {
             let uncompressed = snap::raw::Decoder::new().decompress_vec(data)?;
-            Ok(Bytes::from(uncompressed))
+            Ok(BytesMut::from(uncompressed.as_slice()))
         }
         CompressOptions::Lz4 => {
             let uncompressed = lz4::block::decompress(data, None)?;
-            Ok(uncompressed.into())
+            Ok(BytesMut::from(uncompressed.as_slice()))
         }
     }
 }

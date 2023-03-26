@@ -20,6 +20,7 @@ libc = "*"
 # rayon thread pool doesn't support shutting down
 # rayon = "*"
 yatp = {git = "https://github.com/tikv/yatp"}
+crc32fast = "*"
 
 [dev-dependencies]
 tempfile = "*"
