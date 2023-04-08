@@ -18,7 +18,7 @@ pub struct LsmOptions {
     // l1 single table size
     pub target_file_size_base: usize,
     // l1 total size
-    // advice: memtable_size*min_memtable_to_merge*level0_file_num_compaction_trigger
+    // advice: memtable_size*min_memtable_to_merge * level0_file_num_compaction_trigger
     pub max_bytes_for_level_base: usize, // default 256MB * 2 * 5
     pub max_bytes_for_level_multiplier: usize, // default 10
     pub num_levels: usize,               // default 6

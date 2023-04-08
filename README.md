@@ -14,9 +14,9 @@ A persistent key-value storage in rust, based on LSM tree.
   - [x] WAL and recovery
   - [X] Basic Test
 - [ ] Optimize
-  - [ ] Checksum
-    - [ ] Block
-    - [ ] Sst 
+  - [X] Checksum
+    - [X] Block
+    - [X] Sst 
   - [x] Block Compress 
   - [x] Block Cache
   - [ ] Write Batch

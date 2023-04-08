@@ -1,4 +1,5 @@
 pub mod block;
+pub mod checksum;
 pub mod iterators;
 pub mod level;
 pub mod lsm_iterator;
@@ -9,7 +10,6 @@ pub mod opt;
 pub mod table;
 pub mod util;
 pub mod wal;
-pub mod checksum;
 
 #[cfg(test)]
 mod tests;

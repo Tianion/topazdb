@@ -1,11 +1,14 @@
 use anyhow::Result;
+use bytes::Buf;
 use std::{
     fs::{remove_file, File},
-    io::Write,
+    io::{Read, Write},
     os::unix::prelude::{FileExt, OpenOptionsExt},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
 };
+
+use crate::checksum::{self, CHECKSUM_SIZE};
 
 /// A file object.
 #[derive(Debug)]
@@ -38,6 +41,8 @@ impl FileObject {
         let mut fs = op.open(path)?;
         // fs::write(): data may not actually be written to disk
         fs.write_all(data)?;
+        let checksum = checksum::calculate_checksum(data).to_be_bytes();
+        fs.write_all(&checksum)?;
         fs.flush()?;
         Ok(())
     }
@@ -48,6 +53,7 @@ impl FileObject {
         Self::open(path, o_direct)
     }
 
+    /// open file
     pub fn open(path: impl AsRef<Path>, o_direct: bool) -> Result<Self> {
         let mut op = File::options();
         op.read(true);
@@ -56,12 +62,16 @@ impl FileObject {
             op.custom_flags(libc::O_DIRECT);
         }
 
-        let fs = op.open(&path)?;
-
+        let mut fs = op.open(&path)?;
         let size = fs.metadata()?.len() as usize;
+        let mut buf = Vec::with_capacity(size);
+        fs.read_to_end(&mut buf)?;
+        let expected = (&buf[size - CHECKSUM_SIZE..]).get_u32();
+        checksum::verify_checksum(&buf[..size - CHECKSUM_SIZE], expected)?;
+
         Ok(Self {
             fs,
-            size,
+            size: size - CHECKSUM_SIZE,
             file_name: path.as_ref().to_path_buf(),
             remove_file: AtomicBool::new(true),
         })

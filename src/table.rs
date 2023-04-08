@@ -94,11 +94,12 @@ impl SsTable {
         Ok(table)
     }
 
+    /// Save file when it drop
     pub(crate) fn mark_save(&self) {
         self.file.save()
     }
 
-    // calculate accurate size is expensive
+    // calculating accurate size is expensive
     pub fn overlap_size(&self, lower: &[u8], upper: &[u8]) -> usize {
         let l = self.find_block_idx(lower);
         let r = self.find_block_idx(upper);

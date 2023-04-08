@@ -47,7 +47,7 @@ impl Block {
         let mut data = compress::decode(data)?;
 
         let mut buf = data.split_to(data.len() - 4);
-        
+
         let checksum = data.get_u32();
         checksum::verify_checksum(&buf, checksum)?;
 
@@ -58,7 +58,10 @@ impl Block {
             offsets.push(buf.get_u16());
         }
 
-        Ok(Self { data: buf.freeze(), offsets })
+        Ok(Self {
+            data: buf.freeze(),
+            offsets,
+        })
     }
 }
 

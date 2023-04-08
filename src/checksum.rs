@@ -1,7 +1,9 @@
+use anyhow::{Ok, Result};
 use crc32fast::Hasher;
-use anyhow::{Result, Ok};
 
-pub fn calculate_checksum(data: &[u8]) -> u32{
+pub const CHECKSUM_SIZE: usize = 4;
+
+pub fn calculate_checksum(data: &[u8]) -> u32 {
     let mut hasher = Hasher::new();
     hasher.update(data);
     hasher.finalize()
@@ -12,10 +14,9 @@ pub fn verify_checksum(data: &[u8], expected: u32) -> Result<()> {
     if expected == actual {
         return Ok(());
     }
-    Err(anyhow::anyhow!(
-        format!(
-            "checksum: expected {}, actual {}",
-            expected, actual
+    Err(anyhow::anyhow!(format!(
+        "checksum: expected {}, actual {}",
+        expected, actual
     )))
 }
 
