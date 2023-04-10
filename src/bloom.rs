@@ -1,6 +1,6 @@
 use bytes::Bytes;
 
-// why not to use bitvec: I need flush data to disk, so using &[u8]/Bytes/Vec<u8> is better.
+// why not to use bitvec: It will be written to disk, so using &[u8]/Bytes/Vec<u8> is better.
 pub trait BitSliceMut {
     fn bit_set(&mut self, idx: usize, val: bool);
 }
