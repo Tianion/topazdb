@@ -22,6 +22,10 @@ libc = "*"
 yatp = {git = "https://github.com/tikv/yatp"}
 crc32fast = "*"
 
+[dependencies.xxhash-rust]
+version = "0.8.5"
+features = ["xxh3", "const_xxh3"]
+
 [dev-dependencies]
 tempfile = "*"
 criterion = "*"

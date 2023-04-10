@@ -1,4 +1,5 @@
 pub mod block;
+pub mod bloom;
 pub mod checksum;
 pub mod iterators;
 pub mod level;
