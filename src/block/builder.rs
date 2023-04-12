@@ -2,6 +2,7 @@ use super::{Block, SIZEOF_U16};
 use bytes::{BufMut, Bytes, BytesMut};
 
 /// Builds a block.
+#[derive(Debug)]
 pub struct BlockBuilder {
     target_size: usize,
     data: BytesMut,

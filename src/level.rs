@@ -471,6 +471,9 @@ impl LevelController {
         if !tables.is_empty() {
             let mut iters = Vec::with_capacity(tables.len());
             for table in tables.iter().rev() {
+                if !table.may_contain(key) {
+                    continue;
+                }
                 iters.push(Box::new(SsTableIterator::create_and_seek_to_key(
                     table.clone(),
                     key,
@@ -494,7 +497,11 @@ impl LevelController {
             let idx = tables
                 .partition_point(|table| table.smallest_key <= key)
                 .saturating_sub(1);
-            let iter = SsTableIterator::create_and_seek_to_key(tables[idx].clone(), key)?;
+            let table = tables[idx].clone();
+            if !table.may_contain(key) {
+                continue;
+            }
+            let iter = SsTableIterator::create_and_seek_to_key(table, key)?;
             if iter.is_valid() && iter.key() == key {
                 if iter.value().is_empty() {
                     return Ok(None);

@@ -63,9 +63,11 @@ fn test_sst_build_all() {
 fn test_sst_decode() {
     let (_dir, sst) = generate_sst();
     let meta = sst.block_metas.clone();
+    let bloom = sst.bloom;
     let file = sst.file;
     let new_sst = SsTable::open(0, None, file).unwrap();
     assert_eq!(new_sst.block_metas, meta);
+    assert_eq!(new_sst.bloom, bloom);
 }
 
 fn as_bytes(x: &[u8]) -> Bytes {
@@ -132,4 +134,21 @@ fn test_sst_seek_key() {
         }
         iter.seek_to_key(b"k").unwrap();
     }
+}
+
+#[test]
+fn test_sst_bloom() {
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(16));
+    builder.add(b"11", b"11").unwrap();
+    builder.add(b"22", b"22").unwrap();
+    builder.add(b"33", b"11").unwrap();
+
+    let dir = tempdir().unwrap();
+    let sst = builder.build_for_test(dir.path().join("1.sst")).unwrap();
+    assert!(sst.may_contain(b"11"));
+    assert!(sst.may_contain(b"22"));
+    assert!(sst.may_contain(b"33"));
+    assert!(!sst.may_contain(b"44"));
+    assert!(!sst.may_contain(b"55"));
+    assert!(!sst.may_contain(b"66"));
 }

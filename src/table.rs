@@ -13,6 +13,7 @@ pub use iterator::SsTableIterator;
 use std::sync::Arc;
 
 use crate::block::{Block, BlockIterator, SIZEOF_U16};
+use crate::bloom::Bloom;
 use crate::level::BlockCache;
 
 const SIZEOF_U32: usize = 4;
@@ -68,30 +69,53 @@ pub struct SsTable {
     pub smallest_key: Bytes,
     pub biggest_key: Bytes,
     pub size: usize,
+    bloom: Option<Bloom>,
+}
+
+fn read_bloom(file: &FileObject) -> Result<(usize, Option<Bloom>)> {
+    let size = file.size();
+    let offset = file
+        .read(size - SIZEOF_U32, SIZEOF_U32)?
+        .as_slice()
+        .get_u32() as usize;
+    if size == offset + SIZEOF_U32 {
+        return Ok((offset, None));
+    }
+    let bloom_buf = file.read(offset, size - SIZEOF_U32 - offset)?;
+    let bloom = Bloom::decode(&bloom_buf);
+    Ok((offset, Some(bloom)))
 }
 
 impl SsTable {
     /// Open SSTable from a file.
     pub fn open(id: u64, block_cache: Option<Arc<BlockCache>>, file: FileObject) -> Result<Self> {
-        let size = file.size();
+        let (offset, bloom) = read_bloom(&file)?;
         let meta_offset = file
-            .read(size - SIZEOF_U32, SIZEOF_U32)?
+            .read(offset - SIZEOF_U32, SIZEOF_U32)?
             .as_slice()
             .get_u32() as usize;
-        let meta_buf = file.read(meta_offset, size - SIZEOF_U32 - meta_offset)?;
+        let meta_buf = file.read(meta_offset, offset - SIZEOF_U32 - meta_offset)?;
 
         let mut table = Self {
             id,
+            size: file.size(),
             file,
-            size,
             block_metas: BlockMeta::decode_block_meta(meta_buf.as_slice()),
             block_meta_offset: meta_offset,
             block_cache,
             smallest_key: Bytes::new(),
             biggest_key: Bytes::new(),
+            bloom,
         };
         table.init_samllest_biggest_key()?;
         Ok(table)
+    }
+
+    pub fn may_contain(&self, key: &[u8]) -> bool {
+        if let Some(bloom) = self.bloom.as_ref() {
+            return bloom.may_contain(xxhash_rust::xxh3::xxh3_64(key));
+        }
+        true
     }
 
     /// Save file when it drop

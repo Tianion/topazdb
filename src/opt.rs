@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{block::CompressOptions, lsm_storage::LsmStorage};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LsmOptions {
     pub dir: PathBuf,
     pub flush_num: usize,             //  it must be 1 now. TODO: use lock
@@ -24,6 +24,7 @@ pub struct LsmOptions {
     pub num_levels: usize,               // default 6
     pub compress_option: CompressOptions,
     pub o_direct: bool,
+    pub false_positive_rate: f64, // It will build a bloom filter, if 0 < value < 1
 }
 
 impl Default for LsmOptions {
@@ -45,6 +46,7 @@ impl Default for LsmOptions {
             num_levels: 6,
             compress_option: CompressOptions::Snappy,
             o_direct: false,
+            false_positive_rate: 0.1,
         }
     }
 }

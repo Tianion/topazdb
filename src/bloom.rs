@@ -34,6 +34,7 @@ impl<T: AsRef<[u8]>> BitSlice for T {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Bloom {
     /// data of filter in bits. The last element is k
     filter: Vec<u8>,
@@ -45,7 +46,7 @@ impl Bloom {
     }
 
     pub fn from_keys(keys: &[u64], fpp: f64) -> Self {
-        assert!(fpp < 1.0 && fpp >= 0.0);
+        assert!((0.0..1.0).contains(&fpp));
         let n = keys.len() as f64;
         let m = -(n * fpp.ln()) / std::f64::consts::LN_2.powi(2);
 
@@ -82,8 +83,8 @@ impl Bloom {
         true
     }
 
-    pub fn encode(self) -> Bytes {
-        Bytes::from(self.filter)
+    pub fn encode(&self) -> Bytes {
+        Bytes::copy_from_slice(&self.filter)
     }
 
     pub fn decode(buf: &[u8]) -> Self {
