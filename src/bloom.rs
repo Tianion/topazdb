@@ -45,7 +45,7 @@ impl Bloom {
     }
 
     pub fn from_keys(keys: &[u64], fpp: f64) -> Self {
-        assert!(fpp < 1.0);
+        assert!(fpp < 1.0 && fpp >= 0.0);
         let n = keys.len() as f64;
         let m = -(n * fpp.ln()) / std::f64::consts::LN_2.powi(2);
 
@@ -143,5 +143,21 @@ mod tests {
             .filter(|x| bloom.may_contain(*x))
             .count();
         assert!(cnt <= (10000.0 * (fpp + 0.005)).ceil() as usize)
+    }
+
+    #[test]
+    fn test_bloom_decode() {
+        let hash: Vec<_> = (0..10)
+            .into_iter()
+            .map(|x| format!("key_{x}"))
+            .map(|x| xxh3::xxh3_64(x.as_bytes()))
+            .collect();
+        let fpp = 0.01;
+        let bloom = Bloom::from_keys(&hash, fpp);
+        let buf = bloom.encode();
+        let bloom = Bloom::decode(&buf);
+        for u in hash {
+            assert!(bloom.may_contain(u));
+        }
     }
 }
