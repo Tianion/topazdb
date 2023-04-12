@@ -469,23 +469,17 @@ impl LevelController {
     pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
         let tables = self.inner.levels[0].read().clone();
         if !tables.is_empty() {
-            let mut iters = Vec::with_capacity(tables.len());
             for table in tables.iter().rev() {
                 if !table.may_contain(key) {
                     continue;
                 }
-                iters.push(Box::new(SsTableIterator::create_and_seek_to_key(
-                    table.clone(),
-                    key,
-                )?));
-            }
-
-            let iter = MergeIterator::create(iters);
-            if iter.is_valid() && iter.key() == key {
-                if iter.value().is_empty() {
-                    return Ok(None);
+                let iter = SsTableIterator::create_and_seek_to_key(table.clone(), key)?;
+                if iter.is_valid() && iter.key() == key {
+                    if iter.value().is_empty() {
+                        return Ok(None);
+                    }
+                    return Ok(Some(Bytes::copy_from_slice(iter.value())));
                 }
-                return Ok(Some(Bytes::copy_from_slice(iter.value())));
             }
         }
 
