@@ -21,7 +21,7 @@ A persistent key-value storage in rust, based on LSM tree.
   - [x] Block Cache
   - [ ] Write Batch
   - [ ] Align blocks to 4K 
-  - [ ] Bloom Filter
+  - [X] Bloom Filter
   - [x] Graceful Shutdown and Cleanup
   - [x] Compact Options
 - [ ] More test
