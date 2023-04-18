@@ -179,15 +179,47 @@ impl LsmStorage {
             guard.put(key, value)?;
             guard.memtable.size()
         };
-        if size > self.opt.memtable_size {
-            let mut guard = self.inner.memtables.write();
-            // secondary check
-            if guard.memtable.size() > self.opt.memtable_size {
-                guard.use_new_table()?;
-                debug!("use new memtable");
-            }
+        self.may_use_new_table(size)
+    }
+
+    // TODO: async by channel
+    // 1. channel send entry to write core
+    // 2. merge request
+    // 3. batch write
+    // ok... There may be several options here.
+    // consider this case: A puts (k1, v1), B puts (k2, v2)
+    // then A and B both receive OK
+    pub fn put_to_channel(
+        &self,
+        _key: &[u8],
+        _value: &[u8],
+    ) -> Result<crossbeam_channel::Receiver<()>> {
+        todo!()
+    }
+
+    fn may_use_new_table(&self, size: usize) -> Result<()> {
+        if size <= self.opt.memtable_size {
+            return Ok(());
         }
+
+        let mut guard = self.inner.memtables.write();
+        // secondary check
+        if guard.memtable.size() > self.opt.memtable_size {
+            guard.use_new_table()?;
+            debug!("use new memtable");
+        }
+
         Ok(())
+    }
+
+    pub fn batch_put(&self, entries: Vec<(&[u8], &[u8])>) -> Result<()> {
+        let size = {
+            let guard = self.inner.memtables.read();
+            guard.put_entries(entries)?;
+            guard.memtable.size()
+        };
+
+        self.may_use_new_table(size)
     }
 
     /// Persist data to disk.

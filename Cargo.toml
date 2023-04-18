@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "*"
 bytes = "*"
-crossbeam-skiplist = "*"
+crossbeam = { git = "https://github.com/Tianion/crossbeam.git", branch = "feat/skiplist"}
 crossbeam-channel = "*"
 parking_lot = "*"
 ouroboros = "*"

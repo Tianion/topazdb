@@ -5,8 +5,9 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use bytes::Bytes;
+use crossbeam::skiplist as crossbeam_skiplist;
 use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
@@ -90,11 +91,15 @@ impl MemTables {
     pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
         self.memtable.put(key, value)
     }
+
+    pub fn put_entries(&self, entries: Vec<(&[u8], &[u8])>) -> Result<()> {
+        self.memtable.put_entries(entries)
+    }
 }
 
 /// A basic mem-table based on crossbeam-skiplist
 pub struct MemTable {
-    map: Arc<SkipMap<Bytes, Bytes>>,
+    map: Arc<SkipMap<Bytes, Value>>,
     size: AtomicUsize,
     wal: Wal,
 }
@@ -119,7 +124,13 @@ impl MemTable {
             let key = Bytes::copy_from_slice(iter.key());
             let value = Bytes::copy_from_slice(iter.value());
             size += key.len() + value.len();
-            map.insert(key, value);
+            map.insert(
+                key,
+                Value {
+                    val: value,
+                    version: 0,
+                },
+            );
             iter.next();
         }
         Ok(Self {
@@ -135,19 +146,43 @@ impl MemTable {
 
     /// Get a value by key.
     pub fn get(&self, key: &[u8]) -> Option<Bytes> {
-        self.map.get(key).map(|entry| entry.value().clone())
+        self.map.get(key).map(|entry| entry.value().val.clone())
     }
 
     /// Put a key-value pair into the mem-table.
     fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
-        self.wal.add(key, value)?;
+        let version = self.wal.add(key, value)?;
+        self.do_mem_put(key, value, version);
+        Ok(())
+    }
+
+    fn put_entries(&self, entries: Vec<(&[u8], &[u8])>) -> Result<()> {
+        let version = self.wal.add_entries(&entries)?;
+        for (key, value) in entries {
+            self.do_mem_put(key, value, version);
+        }
+        Ok(())
+    }
+
+    fn do_mem_put(&self, key: &[u8], value: &[u8], version: u64) {
         let old_size = self
             .map
             .get(key)
-            .map(|entry| entry.key().len() + entry.value().len())
+            .map(|entry| entry.key().len() + entry.value().val.len())
             .unwrap_or(0);
-        self.map
-            .insert(Bytes::copy_from_slice(key), Bytes::copy_from_slice(value));
+
+        let val = Bytes::copy_from_slice(value);
+        let insert_version = self
+            .map
+            .compare_insert(Bytes::copy_from_slice(key), Value { val, version }, |x| {
+                x.version < version
+            })
+            .value()
+            .version;
+
+        if version != insert_version {
+            return;
+        }
 
         if key.len() + value.len() >= old_size {
             let add = key.len() + value.len() - old_size;
@@ -156,8 +191,6 @@ impl MemTable {
             let sub = old_size - key.len() + value.len();
             self.size.fetch_sub(sub, Ordering::Relaxed);
         }
-
-        Ok(())
     }
 
     /// Get an iterator over a range of keys.
@@ -186,28 +219,33 @@ impl MemTable {
     /// Flush the mem-table to SSTable.
     pub fn flush(&self, builder: &mut SsTableBuilder) -> Result<()> {
         for entry in self.map.iter() {
-            builder.add(entry.key(), entry.value())?;
+            builder.add(entry.key(), &entry.value().val)?;
         }
         Ok(())
     }
 }
 
+struct Value {
+    val: Bytes,
+    version: u64,
+}
+
 type SkipMapRangeIter<'a> =
-    crossbeam_skiplist::map::Range<'a, Bytes, (Bound<Bytes>, Bound<Bytes>), Bytes, Bytes>;
+    crossbeam_skiplist::map::Range<'a, Bytes, (Bound<Bytes>, Bound<Bytes>), Bytes, Value>;
 
 /// An iterator over a range of `SkipMap`.
 #[self_referencing]
 pub struct MemTableIterator {
-    map: Arc<SkipMap<Bytes, Bytes>>,
+    map: Arc<SkipMap<Bytes, Value>>,
     #[borrows(map)]
     #[not_covariant]
     iter: SkipMapRangeIter<'this>,
     item: (Bytes, Bytes),
 }
 
-fn entry_to_item(entry: Option<Entry<Bytes, Bytes>>) -> (Bytes, Bytes) {
+fn entry_to_item(entry: Option<Entry<Bytes, Value>>) -> (Bytes, Bytes) {
     entry
-        .map(|x| (x.key().clone(), x.value().clone()))
+        .map(|x| (x.key().clone(), x.value().val.clone()))
         .unwrap_or((Bytes::new(), Bytes::new()))
 }
 

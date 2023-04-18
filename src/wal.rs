@@ -1,6 +1,7 @@
 mod iterator;
 use anyhow::Result;
 
+use bytes::{BufMut, BytesMut};
 use log::debug;
 use parking_lot::Mutex;
 use std::{
@@ -15,16 +16,17 @@ use crate::block::Entry;
 use self::iterator::WalIterator;
 
 enum WalInner {
-    WalWriter(BufWriter<File>),
+    WalWriter((BufWriter<File>, u64)),
     WalReader(BufReader<File>),
 }
 
 impl WalInner {
-    fn append(&mut self, buf: &[u8]) -> Result<()> {
-        if let WalInner::WalWriter(writer) = self {
+    fn append(&mut self, buf: &[u8]) -> Result<u64> {
+        if let WalInner::WalWriter((writer, id)) = self {
             writer.write_all(buf)?;
             writer.flush()?;
-            Ok(())
+            *id += 1;
+            Ok(*id)
         } else {
             Err(anyhow::anyhow!("only write"))
         }
@@ -70,16 +72,25 @@ impl Wal {
         }
         let file = File::options().create_new(true).append(true).open(&path)?;
         Ok(Wal {
-            inner: Mutex::new(WalInner::WalWriter(BufWriter::new(file))),
+            inner: Mutex::new(WalInner::WalWriter((BufWriter::new(file), 0))),
             path: path.as_ref().to_path_buf(),
             remove_file: AtomicBool::new(true),
         })
     }
 
-    pub fn add(&self, key: &[u8], value: &[u8]) -> Result<()> {
+    pub fn add(&self, key: &[u8], value: &[u8]) -> Result<u64> {
         let entry = Entry::new(key, value);
         let buf = entry.encode();
         self.inner.lock().append(&buf)
+    }
+
+    pub fn add_entries(&self, entries: &[(&[u8], &[u8])]) -> Result<u64> {
+        let mut buf = BytesMut::new();
+        for (key, value) in entries {
+            let entry = Entry::new(key, value);
+            buf.put(entry.encode());
+        }
+        self.inner.lock().append(&buf.freeze())
     }
 
     pub fn iter(&self) -> Result<WalIterator> {

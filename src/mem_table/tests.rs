@@ -24,6 +24,20 @@ fn test_memtable_get() {
 }
 
 #[test]
+fn test_memtable_get2() {
+    let (_dir, memtable) = create_for_test();
+    let input = vec![
+        (&b"key1"[..], &b"value1"[..]),
+        (b"key2", b"value2"),
+        (b"key3", b"value3"),
+    ];
+    memtable.put_entries(input).unwrap();
+    assert_eq!(&memtable.get(b"key1").unwrap()[..], b"value1");
+    assert_eq!(&memtable.get(b"key2").unwrap()[..], b"value2");
+    assert_eq!(&memtable.get(b"key3").unwrap()[..], b"value3");
+}
+
+#[test]
 fn test_memtable_overwrite() {
     let (_dir, memtable) = create_for_test();
     memtable.put(b"key1", b"value1").unwrap();
