@@ -127,7 +127,6 @@ mod tests {
     #[test]
     fn test_fpp_bloom_filter() {
         let hash: Vec<_> = (0..1000)
-            .into_iter()
             .map(|x| format!("key_{x}"))
             .map(|x| xxh3::xxh3_64(x.as_bytes()))
             .collect();
@@ -138,7 +137,6 @@ mod tests {
         }
 
         let cnt = (20000..30000)
-            .into_iter()
             .map(|x| format!("key_{x}"))
             .map(|x| xxh3::xxh3_64(x.as_bytes()))
             .filter(|x| bloom.may_contain(*x))
@@ -149,7 +147,6 @@ mod tests {
     #[test]
     fn test_bloom_decode() {
         let hash: Vec<_> = (0..10)
-            .into_iter()
             .map(|x| format!("key_{x}"))
             .map(|x| xxh3::xxh3_64(x.as_bytes()))
             .collect();
