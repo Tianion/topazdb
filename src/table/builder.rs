@@ -64,6 +64,10 @@ impl SsTableBuilder {
     }
 
     fn block_build(&mut self) -> Result<()> {
+        if self.block_builder.is_empty() {
+            return Ok(());
+        }
+
         let mut builder = BlockBuilder::new(self.opt.block_size);
         std::mem::swap(&mut self.block_builder, &mut builder);
 
