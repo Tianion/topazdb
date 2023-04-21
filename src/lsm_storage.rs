@@ -241,6 +241,10 @@ impl LsmStorage {
             }
         }
 
+        if map.is_empty() {
+            return Ok(());
+        }
+
         let mut builder = SsTableBuilder::new(self.opt.clone());
         for (key, value) in &map {
             builder.add(key, value).unwrap();
