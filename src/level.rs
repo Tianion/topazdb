@@ -64,7 +64,7 @@ impl LevelsControllerInner {
         let path = &opt.dir;
         let (manifest, l0_ids) = ManifestFile::open(path)?;
         let id_level = manifest.get_id_level();
-        let next_sst_id = AtomicU64::new(id_level.keys().copied().max().unwrap_or(0));
+        let next_sst_id = AtomicU64::new(id_level.keys().copied().max().unwrap_or(0) + 1);
         let mut levels = vec![vec![]; opt.num_levels];
 
         for id in l0_ids {

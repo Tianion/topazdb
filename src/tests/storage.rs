@@ -197,3 +197,15 @@ fn test_storage_close() {
     let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
     assert_eq!(&storage.get(b"1").unwrap().unwrap()[..], b"233");
 }
+
+#[test]
+fn test_storage_close2() {
+    use crate::lsm_storage::LsmStorage;
+    let dir = tempdir().unwrap();
+    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+    storage.put(b"1", b"233").unwrap();
+    assert_eq!(&storage.get(b"1").unwrap().unwrap()[..], b"233");
+    drop(storage);
+    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+    storage.put(b"2", b"233").unwrap();
+}
