@@ -127,7 +127,6 @@ impl LsmStorage {
 
         let receiver = Arc::new(receiver);
         inner.lvctl.start_compact(pool.clone(), receiver.clone());
-
         let flush_core = inner.clone();
         flush_core.start_flush(pool.clone(), receiver);
 
@@ -212,7 +211,7 @@ impl LsmStorage {
         Ok(())
     }
 
-    pub fn batch_put(&self, entries: Vec<(&[u8], &[u8])>) -> Result<()> {
+    pub fn batch_put(&self, entries: Vec<(Bytes, Bytes)>) -> Result<()> {
         let size = {
             let guard = self.inner.memtables.read();
             guard.put_entries(entries)?;

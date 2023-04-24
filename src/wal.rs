@@ -1,7 +1,7 @@
 mod iterator;
 use anyhow::Result;
 
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use log::debug;
 use parking_lot::Mutex;
 use std::{
@@ -84,7 +84,7 @@ impl Wal {
         self.inner.lock().append(&buf)
     }
 
-    pub fn add_entries(&self, entries: &[(&[u8], &[u8])]) -> Result<u64> {
+    pub fn add_entries(&self, entries: &[(Bytes, Bytes)]) -> Result<u64> {
         let mut buf = BytesMut::new();
         for (key, value) in entries {
             let entry = Entry::new(key, value);

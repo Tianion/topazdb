@@ -92,7 +92,7 @@ impl MemTables {
         self.memtable.put(key, value)
     }
 
-    pub fn put_entries(&self, entries: Vec<(&[u8], &[u8])>) -> Result<()> {
+    pub fn put_entries(&self, entries: Vec<(Bytes, Bytes)>) -> Result<()> {
         self.memtable.put_entries(entries)
     }
 }
@@ -156,10 +156,10 @@ impl MemTable {
         Ok(())
     }
 
-    fn put_entries(&self, entries: Vec<(&[u8], &[u8])>) -> Result<()> {
+    fn put_entries(&self, entries: Vec<(Bytes, Bytes)>) -> Result<()> {
         let version = self.wal.add_entries(&entries)?;
         for (key, value) in entries {
-            self.do_mem_put(key, value, version);
+            self.do_mem_put(&key, &value, version);
         }
         Ok(())
     }

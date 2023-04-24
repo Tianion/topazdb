@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use tempfile::{tempdir, TempDir};
 
 use super::MemTable;
@@ -27,9 +28,9 @@ fn test_memtable_get() {
 fn test_memtable_get2() {
     let (_dir, memtable) = create_for_test();
     let input = vec![
-        (&b"key1"[..], &b"value1"[..]),
-        (b"key2", b"value2"),
-        (b"key3", b"value3"),
+        (Bytes::from_static(b"key1"), Bytes::from_static(b"value1")),
+        (Bytes::from_static(b"key2"), Bytes::from_static(b"value2")),
+        (Bytes::from_static(b"key3"), Bytes::from_static(b"value3")),
     ];
     memtable.put_entries(input).unwrap();
     assert_eq!(&memtable.get(b"key1").unwrap()[..], b"value1");
