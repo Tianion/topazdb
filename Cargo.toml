@@ -34,5 +34,9 @@ criterion = "*"
 name = "sstable_read"
 harness = false
 
+[[bench]]
+name = "write"
+harness = false
+
 [profile.bench]
 debug = true
