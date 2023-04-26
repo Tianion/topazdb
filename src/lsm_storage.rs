@@ -140,7 +140,6 @@ impl LsmStorage {
     }
 
     /// Get a key from the storage.
-    // TODO: this can be further optimized by using a bloom filter.
     pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
         assert!(!key.is_empty(), "key cannot be empty");
 
@@ -211,7 +210,7 @@ impl LsmStorage {
         Ok(())
     }
 
-    pub fn batch_put(&self, entries: Vec<(Bytes, Bytes)>) -> Result<()> {
+    pub fn batch_put(&self, entries: &[(Bytes, Bytes)]) -> Result<()> {
         let size = {
             let guard = self.inner.memtables.read();
             guard.put_entries(entries)?;
