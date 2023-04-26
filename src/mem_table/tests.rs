@@ -32,7 +32,7 @@ fn test_memtable_get2() {
         (Bytes::from_static(b"key2"), Bytes::from_static(b"value2")),
         (Bytes::from_static(b"key3"), Bytes::from_static(b"value3")),
     ];
-    memtable.put_entries(input).unwrap();
+    memtable.put_entries(&input).unwrap();
     assert_eq!(&memtable.get(b"key1").unwrap()[..], b"value1");
     assert_eq!(&memtable.get(b"key2").unwrap()[..], b"value2");
     assert_eq!(&memtable.get(b"key3").unwrap()[..], b"value3");

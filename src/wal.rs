@@ -2,7 +2,6 @@ mod iterator;
 use anyhow::Result;
 
 use bytes::{BufMut, Bytes, BytesMut};
-use log::debug;
 use parking_lot::Mutex;
 use std::{
     fs::{remove_file, File},
@@ -70,7 +69,10 @@ impl Wal {
         if path.as_ref().exists() {
             remove_file(&path)?;
         }
-        let file = File::options().create_new(true).append(true).open(&path)?;
+        let file = match File::options().create_new(true).append(true).open(&path) {
+            Ok(file) => file,
+            Err(e) => panic!("{e}: {:?}", path.as_ref()),
+        };
         Ok(Wal {
             inner: Mutex::new(WalInner::WalWriter((BufWriter::new(file), 0))),
             path: path.as_ref().to_path_buf(),
@@ -102,9 +104,10 @@ impl Wal {
 
 impl Drop for Wal {
     fn drop(&mut self) {
-        debug!("{:?} begin drop", self.path);
         if self.remove_file.load(Ordering::Relaxed) {
-            remove_file(&self.path).unwrap();
+            if let Err(e) = remove_file(&self.path) {
+                panic!("{e}: {:?}", self.path);
+            }
         }
     }
 }
