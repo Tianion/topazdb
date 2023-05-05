@@ -58,7 +58,7 @@ fn test_memtable_flush() {
     memtable.put(b"key1", b"value1").unwrap();
     memtable.put(b"key2", b"value2").unwrap();
     memtable.put(b"key3", b"value3").unwrap();
-    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(128));
+    let mut builder = SsTableBuilder::new(LsmOptions::default().block_size(128).into());
     memtable.flush(&mut builder).unwrap();
     let dir = tempdir().unwrap();
     let sst = builder.build_for_test(dir.path().join("1.sst")).unwrap();

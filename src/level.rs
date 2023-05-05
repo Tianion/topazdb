@@ -39,20 +39,20 @@ struct LevelsControllerInner {
     levels: Vec<RwLock<Vec<Arc<SsTable>>>>,
     compact_job: Arc<Vec<Mutex<HashSet<u64>>>>,
     manifest: Arc<ManifestFile>,
-    opt: LsmOptions,
+    opts: Arc<LsmOptions>,
 }
 
 impl LevelsControllerInner {
     fn max_level_byte(&self, level: usize) -> usize {
-        let mut base_byte = self.opt.max_bytes_for_level_base;
+        let mut base_byte = self.opts.max_bytes_for_level_base;
         for _ in 1..=level {
-            base_byte *= self.opt.max_bytes_for_level_multiplier;
+            base_byte *= self.opts.max_bytes_for_level_multiplier;
         }
         base_byte
     }
 
     fn max_level_file(&self, level: usize) -> usize {
-        let file_size_base = self.opt.max_bytes_for_level_base / self.opt.target_file_size_base;
+        let file_size_base = self.opts.max_bytes_for_level_base / self.opts.target_file_size_base;
         let mut num = file_size_base;
         for _ in 1..=level {
             num *= file_size_base;
@@ -60,16 +60,16 @@ impl LevelsControllerInner {
         num
     }
 
-    fn new(opt: LsmOptions, block_cache: Arc<BlockCache>) -> Result<Self> {
-        let path = &opt.dir;
+    fn new(opts: Arc<LsmOptions>, block_cache: Arc<BlockCache>) -> Result<Self> {
+        let path = &opts.dir;
         let (manifest, l0_ids) = ManifestFile::open(path)?;
         let id_level = manifest.get_id_level();
         let next_sst_id = AtomicU64::new(id_level.keys().copied().max().unwrap_or(0) + 1);
-        let mut levels = vec![vec![]; opt.num_levels];
+        let mut levels = vec![vec![]; opts.num_levels];
 
         for id in l0_ids {
             if id_level.contains_key(&id) {
-                let file = FileObject::open(&sstable_file_path(path, id), opt.o_direct)?;
+                let file = FileObject::open(&sstable_file_path(path, id), opts.o_direct)?;
                 let table = Arc::new(SsTable::open(id, Some(block_cache.clone()), file)?);
                 levels[0].push(table);
             }
@@ -79,7 +79,7 @@ impl LevelsControllerInner {
             if level == 0 {
                 continue;
             }
-            let file = FileObject::open(&sstable_file_path(path, id), opt.o_direct)?;
+            let file = FileObject::open(&sstable_file_path(path, id), opts.o_direct)?;
             let table = Arc::new(SsTable::open(id, Some(block_cache.clone()), file)?);
             levels[level].push(table);
         }
@@ -90,7 +90,7 @@ impl LevelsControllerInner {
         }
         let compact_job = Arc::new(compact_job);
         Ok(Self {
-            opt,
+            opts,
             next_sst_id,
             levels,
             compact_job,
@@ -146,7 +146,7 @@ impl LevelsControllerInner {
 
         let mut iter = MergeIterator::create(iters);
 
-        let mut builder = SsTableBuilder::new(self.opt.clone());
+        let mut builder = SsTableBuilder::new(self.opts.clone());
         while iter.is_valid() {
             builder.add(iter.key(), iter.value());
             iter.next()?;
@@ -246,7 +246,7 @@ impl LevelsControllerInner {
             }
         }
         while iter.is_valid() && key_vaild(&iter, &upper) {
-            let mut build = SsTableBuilder::new(self.opt.clone());
+            let mut build = SsTableBuilder::new(self.opts.clone());
 
             while iter.is_valid() && !build.reach_capacity() && key_vaild(&iter, &upper) {
                 build.add(iter.key(), iter.value())?;
@@ -257,7 +257,7 @@ impl LevelsControllerInner {
             new_tables.push(Arc::new(build.build(
                 id,
                 None,
-                sstable_file_path(&self.opt.dir, id),
+                sstable_file_path(&self.opts.dir, id),
             )?));
         }
         Ok(new_tables)
@@ -449,20 +449,20 @@ fn build_change_set(task: &Task, new_tables: &[Arc<SsTable>]) -> ManifestChangeS
 pub struct LevelController {
     inner: Arc<LevelsControllerInner>,
     block_cache: Arc<BlockCache>,
-    opt: LsmOptions,
+    opts: Arc<LsmOptions>,
 }
 
 impl LevelController {
-    pub fn open(opt: LsmOptions) -> Result<Self> {
-        let block_cache = Arc::new(BlockCache::new(opt.block_cache_size));
+    pub fn open(opts: Arc<LsmOptions>) -> Result<Self> {
+        let block_cache = Arc::new(BlockCache::new(opts.block_cache_size));
         let inner = Arc::new(LevelsControllerInner::new(
-            opt.clone(),
+            opts.clone(),
             block_cache.clone(),
         )?);
         Ok(Self {
             inner,
             block_cache,
-            opt,
+            opts,
         })
     }
 
@@ -483,7 +483,7 @@ impl LevelController {
             }
         }
 
-        for i in 1..self.opt.num_levels {
+        for i in 1..self.opts.num_levels {
             let tables = self.inner.levels[i].read().clone();
             if tables.is_empty() {
                 continue;
@@ -507,7 +507,7 @@ impl LevelController {
     }
 
     pub fn start_compact(&self, pool: Arc<ThreadPool>, closer: Arc<Receiver<()>>) {
-        for i in 0..self.opt.compactor_num {
+        for i in 0..self.opts.compactor_num {
             self.run_compactor(i, pool.clone(), closer.clone());
         }
     }
@@ -561,7 +561,7 @@ impl LevelController {
         let table = Arc::new(builder.build(
             id,
             Some(self.block_cache.clone()),
-            sstable_file_path(&self.opt.dir, id),
+            sstable_file_path(&self.opts.dir, id),
         )?);
         self.inner.manifest.apply_change(&Change::create(id, 0))?;
         self.inner.levels[0].write().push(table);

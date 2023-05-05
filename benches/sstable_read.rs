@@ -22,11 +22,11 @@ fn num_of_keys() -> usize {
 }
 
 fn generate_sst(compress_option: CompressOptions) -> (TempDir, SsTable) {
-    let opt = LsmOptions {
+    let opts = LsmOptions {
         compress_option,
         ..Default::default()
     };
-    let mut builder = SsTableBuilder::new(opt);
+    let mut builder = SsTableBuilder::new(opts.into());
     for idx in 0..num_of_keys() {
         let key = key_of(idx);
         let value = value_of(idx);

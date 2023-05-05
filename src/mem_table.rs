@@ -22,11 +22,11 @@ pub struct MemTables {
     pub memtable: Arc<MemTable>,
     pub imm_memtables: VecDeque<Arc<MemTable>>,
     pub next_mem_id: usize,
-    opt: LsmOptions,
+    opt: Arc<LsmOptions>,
 }
 
 impl MemTables {
-    pub fn new(opt: LsmOptions) -> Result<Self> {
+    pub fn new(opt: Arc<LsmOptions>) -> Result<Self> {
         let (imm_memtables, next_mem_id) = Self::open_mem_tables(&opt)?;
 
         Ok(MemTables {
