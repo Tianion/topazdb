@@ -25,15 +25,15 @@ pub struct LsmStorageInner {
     /// Memory table
     memtables: RwLock<MemTables>,
     lvctl: LevelController,
-    opt: LsmOptions,
+    opts: Arc<LsmOptions>,
 }
 
 impl LsmStorageInner {
-    fn create(opt: LsmOptions) -> Result<Self> {
+    fn create(opts: Arc<LsmOptions>) -> Result<Self> {
         Ok(Self {
-            memtables: RwLock::new(MemTables::new(opt.clone())?),
-            lvctl: LevelController::open(opt.clone())?,
-            opt,
+            memtables: RwLock::new(MemTables::new(opts.clone())?),
+            lvctl: LevelController::open(opts.clone())?,
+            opts,
         })
     }
 
@@ -43,10 +43,10 @@ impl LsmStorageInner {
         pool.spawn(move |_: &mut Handle| {
             let run_once = || -> Result<()> {
                 let mut imm_memtable = inner.memtables.read().imm_memtables.clone();
-                if imm_memtable.len() < inner.opt.min_memtable_to_merge {
+                if imm_memtable.len() < inner.opts.min_memtable_to_merge {
                     return Ok(());
                 }
-                let mut memtables = Vec::with_capacity(inner.opt.min_memtable_to_merge);
+                let mut memtables = Vec::with_capacity(inner.opts.min_memtable_to_merge);
                 while let Some(memtable) = imm_memtable.pop_front() {
                     memtables.push(memtable);
                 }
@@ -58,7 +58,7 @@ impl LsmStorageInner {
                         .collect(),
                 );
 
-                let mut builder = SsTableBuilder::new(self.opt.clone());
+                let mut builder = SsTableBuilder::new(self.opts.clone());
 
                 while iter.is_valid() {
                     builder.add(iter.key(), iter.value())?;
@@ -79,7 +79,7 @@ impl LsmStorageInner {
 
             let full_run = || {
                 let len = self.memtables.read().imm_memtables.len();
-                if len < self.opt.max_memtable_num - 1 {
+                if len < self.opts.max_memtable_num - 1 {
                     return Ok(());
                 }
                 run_once()
@@ -106,22 +106,24 @@ pub type ThreadPool = yatp::ThreadPool<TaskCell>;
 /// The storage interface of the LSM tree.
 pub struct LsmStorage {
     inner: Arc<LsmStorageInner>,
-    opt: LsmOptions,
+    opts: Arc<LsmOptions>,
     closer: Option<Sender<()>>,
     pool: Arc<ThreadPool>,
     flush_lock: Mutex<()>,
 }
 
 impl LsmStorage {
-    pub fn open(opt: LsmOptions) -> Result<Self> {
+    pub fn open(opts: LsmOptions) -> Result<Self> {
         let pool = yatp::Builder::new("topazdb")
-            .max_thread_count(opt.compactor_num * 6 + 2)
-            .min_thread_count(opt.compactor_num * 4 + 2)
+            .max_thread_count(opts.compactor_num * 6 + 2)
+            .min_thread_count(opts.compactor_num * 4 + 2)
             .build_callback_pool();
+
+        let opts = Arc::new(opts);
 
         let pool = Arc::new(pool);
 
-        let inner = Arc::new(LsmStorageInner::create(opt.clone())?);
+        let inner = Arc::new(LsmStorageInner::create(opts.clone())?);
 
         let (sender, receiver) = crossbeam_channel::unbounded();
 
@@ -135,7 +137,7 @@ impl LsmStorage {
             flush_lock: Mutex::new(()),
             closer: Some(sender),
             pool,
-            opt,
+            opts,
         })
     }
 
@@ -197,13 +199,13 @@ impl LsmStorage {
     }
 
     fn may_use_new_table(&self, size: usize) -> Result<()> {
-        if size <= self.opt.memtable_size {
+        if size <= self.opts.memtable_size {
             return Ok(());
         }
 
         let mut guard = self.inner.memtables.write();
         // secondary check
-        if guard.memtable.size() > self.opt.memtable_size {
+        if guard.memtable.size() > self.opts.memtable_size {
             guard.use_new_table()?;
             debug!("use new memtable");
         }
@@ -244,7 +246,7 @@ impl LsmStorage {
             return Ok(());
         }
 
-        let mut builder = SsTableBuilder::new(self.opt.clone());
+        let mut builder = SsTableBuilder::new(self.opts.clone());
         for (key, value) in &map {
             builder.add(key, value).unwrap();
         }
