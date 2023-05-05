@@ -20,7 +20,7 @@ pub struct SsTableBuilder {
     // current block builder
     block_builder: BlockBuilder,
     base_key: Bytes,
-    pub opt: LsmOptions,
+    pub opts: Arc<LsmOptions>,
     key_hashs: Option<Vec<u64>>,
 }
 
@@ -28,8 +28,8 @@ const TABLE_CAPACITY: usize = 64 * 1024 * 1024;
 
 impl SsTableBuilder {
     /// Create a builder based on target block size.
-    pub fn new(opt: LsmOptions) -> Self {
-        let key_hashs = if opt.false_positive_rate.is_sign_positive() {
+    pub fn new(opts: Arc<LsmOptions>) -> Self {
+        let key_hashs = if opts.false_positive_rate.is_sign_positive() {
             Some(Vec::new())
         } else {
             None
@@ -38,9 +38,9 @@ impl SsTableBuilder {
         Self {
             meta: vec![],
             data: BytesMut::new(),
-            block_builder: BlockBuilder::new(opt.block_size),
+            block_builder: BlockBuilder::new(opts.block_size),
             base_key: Bytes::new(),
-            opt,
+            opts,
             key_hashs,
         }
     }
@@ -68,10 +68,10 @@ impl SsTableBuilder {
             return Ok(());
         }
 
-        let mut builder = BlockBuilder::new(self.opt.block_size);
+        let mut builder = BlockBuilder::new(self.opts.block_size);
         std::mem::swap(&mut self.block_builder, &mut builder);
 
-        let byte = builder.build().encode(self.opt.compress_option)?;
+        let byte = builder.build().encode(self.opts.compress_option)?;
         let mut key = Bytes::new();
         std::mem::swap(&mut key, &mut self.base_key);
 
@@ -108,11 +108,11 @@ impl SsTableBuilder {
         self.data.put_u32(offset as u32);
 
         let mut bloom = None;
-        if self.opt.false_positive_rate.is_sign_positive() {
+        if self.opts.false_positive_rate.is_sign_positive() {
             bloom = Some(self.build_bloom());
         }
 
-        let file = FileObject::create(path.as_ref(), &self.data, self.opt.o_direct)?;
+        let file = FileObject::create(path.as_ref(), &self.data, self.opts.o_direct)?;
         let mut sst = SsTable {
             id,
             size: file.size(),
@@ -133,7 +133,7 @@ impl SsTableBuilder {
         let offset = self.data.len();
         let bloom = Bloom::from_keys(
             self.key_hashs.as_ref().expect("expect key hashs"),
-            self.opt.false_positive_rate,
+            self.opts.false_positive_rate,
         );
         self.data.put(bloom.encode());
         self.data.put_u32(offset as u32);
