@@ -25,6 +25,7 @@ pub struct LsmOptions {
     pub compress_option: CompressOptions,
     pub o_direct: bool,
     pub false_positive_rate: f64, // It will build a bloom filter, if 0 < value < 1
+    pub wait_entry_num: usize,    // default 10.
 }
 
 impl Default for LsmOptions {
@@ -47,6 +48,7 @@ impl Default for LsmOptions {
             compress_option: CompressOptions::Snappy,
             o_direct: false,
             false_positive_rate: 0.1,
+            wait_entry_num: 10,
         }
     }
 }

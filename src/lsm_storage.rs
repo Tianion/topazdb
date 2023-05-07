@@ -28,6 +28,11 @@ pub struct LsmStorageInner {
     opts: Arc<LsmOptions>,
 }
 
+pub struct Request {
+    entries: Vec<(Bytes, Bytes)>,
+    sender: Sender<bool>,
+}
+
 impl LsmStorageInner {
     fn create(opts: Arc<LsmOptions>) -> Result<Self> {
         Ok(Self {
@@ -35,6 +40,46 @@ impl LsmStorageInner {
             lvctl: LevelController::open(opts.clone())?,
             opts,
         })
+    }
+
+    fn start_write(
+        self: Arc<Self>,
+        pool: Arc<ThreadPool>,
+        receiver: Receiver<Request>,
+        closer: Arc<Receiver<()>>,
+    ) {
+        pool.spawn(move |_: &mut Handle| {
+            let mut buf = Vec::new();
+            let mut senders = Vec::new();
+            let mut run_once = |mut request: Request| {
+                buf.append(&mut request.entries);
+                if buf.len() > 10 {
+                    return;
+                }
+                senders.push(request.sender);
+
+                let mut ret = true;
+                if let Err(e) = self.memtables.read().put_entries(&buf) {
+                    error!("put_entries error: {e}");
+                    ret = false;
+                }
+
+                for sender in &senders {
+                    if let Err(e) = sender.send(ret) {
+                        error!("sender err: {e}");
+                    }
+                }
+
+                buf.clear();
+                senders.clear();
+            };
+            loop {
+                select! {
+                    recv(receiver) -> req => run_once(req.unwrap()),
+                    recv(closer) -> _ => break,
+                };
+            }
+        });
     }
 
     //TODO: channel send task
@@ -108,6 +153,7 @@ pub struct LsmStorage {
     inner: Arc<LsmStorageInner>,
     opts: Arc<LsmOptions>,
     closer: Option<Sender<()>>,
+    write_sender: Option<Sender<Request>>,
     pool: Arc<ThreadPool>,
     flush_lock: Mutex<()>,
 }
@@ -127,15 +173,25 @@ impl LsmStorage {
 
         let (sender, receiver) = crossbeam_channel::unbounded();
 
-        let receiver = Arc::new(receiver);
-        inner.lvctl.start_compact(pool.clone(), receiver.clone());
+        let closer = Arc::new(receiver);
+        inner.lvctl.start_compact(pool.clone(), closer.clone());
+
         let flush_core = inner.clone();
-        flush_core.start_flush(pool.clone(), receiver);
+        flush_core.start_flush(pool.clone(), closer.clone());
+
+        let mut write_sender = None;
+        if opts.wait_entry_num > 0 {
+            let write_core = inner.clone();
+            let (sender, recevier) = crossbeam_channel::unbounded();
+            write_core.start_write(pool.clone(), recevier, closer);
+            write_sender = Some(sender);
+        }
 
         Ok(Self {
             inner,
             flush_lock: Mutex::new(()),
             closer: Some(sender),
+            write_sender,
             pool,
             opts,
         })
@@ -182,7 +238,6 @@ impl LsmStorage {
         self.may_use_new_table(size)
     }
 
-    // TODO: async by channel
     // 1. channel send entry to write core
     // 2. merge request
     // 3. batch write
@@ -191,10 +246,15 @@ impl LsmStorage {
     // then A and B both receive OK
     pub fn put_to_channel(
         &self,
-        _key: &[u8],
-        _value: &[u8],
-    ) -> Result<crossbeam_channel::Receiver<()>> {
-        todo!()
+        entries: Vec<(Bytes, Bytes)>,
+    ) -> Result<crossbeam_channel::Receiver<bool>> {
+        if self.write_sender.is_none() {
+            return Err(anyhow::anyhow!("write sender is empty"));
+        }
+        let (sender, receiver) = crossbeam_channel::unbounded();
+        let request = Request { entries, sender };
+        self.write_sender.as_ref().unwrap().send(request)?;
+        Ok(receiver)
     }
 
     fn may_use_new_table(&self, size: usize) -> Result<()> {
