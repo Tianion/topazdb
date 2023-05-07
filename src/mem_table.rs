@@ -70,6 +70,7 @@ impl MemTables {
         Ok((mts, next_mem_fid))
     }
 
+    /// Get current sorted MemTables
     pub fn view(&self) -> Vec<Arc<MemTable>> {
         let mut view = Vec::with_capacity(self.imm_memtables.len() + 1);
         for memtable in self.imm_memtables.iter() {
@@ -79,6 +80,7 @@ impl MemTables {
         view
     }
 
+    /// Push old mutable memtable to immutable mmtables, and create a mutable memtable
     pub fn use_new_table(&mut self) -> Result<()> {
         let table = Arc::new(MemTable::create(&self.opt.dir, self.next_mem_id)?);
         self.next_mem_id += 1;

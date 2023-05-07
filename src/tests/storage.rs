@@ -9,6 +9,14 @@ fn as_bytes(x: &[u8]) -> Bytes {
     Bytes::copy_from_slice(x)
 }
 
+fn key_of(idx: usize) -> Vec<u8> {
+    format!("key_{:04}", idx).into_bytes()
+}
+
+fn value_of(idx: usize, info: &str) -> Vec<u8> {
+    format!("value_{:04}_{}", idx, info).into_bytes()
+}
+
 fn check_iter_result(iter: impl StorageIterator, expected: Vec<(Bytes, Bytes)>) {
     let mut iter = iter;
     for (k, v) in expected {
@@ -45,6 +53,43 @@ fn test_storage_get() {
     assert_eq!(&storage.get(b"3").unwrap().unwrap()[..], b"23333");
     storage.delete(b"2").unwrap();
     assert!(storage.get(b"2").unwrap().is_none());
+}
+
+#[test]
+fn test_storage_channel_put() {
+    use crate::lsm_storage::LsmStorage;
+    let dir = tempdir().unwrap();
+    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+    let mut rs = Vec::new();
+    let kvs = (0..3)
+        .map(|idx| (as_bytes(&key_of(idx)), as_bytes(&value_of(idx, ""))))
+        .collect::<Vec<_>>();
+    for kv in &kvs {
+        let entries = vec![kv.clone()];
+        let r = storage.put_to_channel(entries).unwrap();
+        rs.push(r);
+    }
+    for r in rs {
+        assert!(r.recv().unwrap());
+    }
+    for kv in kvs {
+        assert_eq!(storage.get(&kv.0).unwrap().unwrap(), kv.1);
+    }
+}
+
+#[test]
+fn test_storage_batch_put() {
+    use crate::lsm_storage::LsmStorage;
+    let dir = tempdir().unwrap();
+    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+
+    let kvs = (0..3)
+        .map(|idx| (as_bytes(&key_of(idx)), as_bytes(&value_of(idx, ""))))
+        .collect::<Vec<_>>();
+    storage.batch_put(&kvs).unwrap();
+    for kv in kvs {
+        assert_eq!(storage.get(&kv.0).unwrap().unwrap(), kv.1);
+    }
 }
 
 #[test]
