@@ -78,6 +78,20 @@ fn test_storage_channel_put() {
 }
 
 #[test]
+fn test_storage_channel_put_not_msg() {
+    use crate::lsm_storage::LsmStorage;
+    let dir = tempdir().unwrap();
+    let storage = LsmStorage::open(LsmOptions::default().path(&dir)).unwrap();
+    let kvs = (0..3)
+        .map(|idx| (as_bytes(&key_of(idx)), as_bytes(&value_of(idx, ""))))
+        .collect::<Vec<_>>();
+    for kv in &kvs {
+        let entries = vec![kv.clone()];
+        storage.put_to_channel_not_msg(entries).unwrap();
+    }
+}
+
+#[test]
 fn test_storage_batch_put() {
     use crate::lsm_storage::LsmStorage;
     let dir = tempdir().unwrap();
