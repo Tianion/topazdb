@@ -1,10 +1,12 @@
 use std::{
     fs::{create_dir, remove_dir_all},
     sync::Arc,
+    time::Instant,
 };
 
 use bytes::Bytes;
 use criterion::{criterion_group, criterion_main, Criterion};
+use crossbeam::skiplist::SkipMap;
 use tempfile::tempdir;
 use topazdb::opt::LsmOptions;
 
@@ -17,7 +19,7 @@ fn value_of(idx: usize) -> Vec<u8> {
 }
 
 fn num_of_keys() -> usize {
-    1000
+    500
 }
 
 const DIR: &str = "./benches_wirte_test";
@@ -30,14 +32,14 @@ fn generate_kvs() -> Vec<(Vec<u8>, Vec<u8>)> {
 
 fn bench_batch_write_real(c: &mut Criterion) {
     let mut opts = LsmOptions::default().path(DIR);
-    opts.memtable_size = 4096 * 10;
+    opts.memtable_size = 4096 * 1000;
     opts.block_size = 4096;
     let storage = Arc::new(opts.open().unwrap());
     let kvs = generate_kvs()
         .into_iter()
         .map(|x| (Bytes::from(x.0), Bytes::from(x.1)))
         .collect::<Vec<_>>()
-        .chunks(10)
+        .chunks(100)
         .map(|x| x.to_vec())
         .collect::<Vec<_>>();
     c.bench_function("bench_batch_write", |b| {
@@ -51,7 +53,7 @@ fn bench_batch_write_real(c: &mut Criterion) {
 
 fn bench_write_real(c: &mut Criterion) {
     let mut opts = LsmOptions::default().path(DIR);
-    opts.memtable_size = 4096 * 10;
+    opts.memtable_size = 4096 * 1000;
     opts.block_size = 4096;
     let storage = Arc::new(opts.open().unwrap());
     let kvs = generate_kvs()
@@ -70,14 +72,14 @@ fn bench_write_real(c: &mut Criterion) {
 fn bench_batch_write_tmpfs(c: &mut Criterion) {
     let dir = tempdir().unwrap();
     let mut opts = LsmOptions::default().path(dir.path());
-    opts.memtable_size = 4096 * 10;
+    opts.memtable_size = 4096 * 1000;
     opts.block_size = 4096;
     let storage = Arc::new(opts.open().unwrap());
     let kvs = generate_kvs()
         .into_iter()
         .map(|x| (Bytes::from(x.0), Bytes::from(x.1)))
         .collect::<Vec<_>>()
-        .chunks(10)
+        .chunks(100)
         .map(|x| x.to_vec())
         .collect::<Vec<_>>();
     c.bench_function("bench_batch_write_tmpfs", |b| {
@@ -92,7 +94,7 @@ fn bench_batch_write_tmpfs(c: &mut Criterion) {
 fn bench_write_tmpfs(c: &mut Criterion) {
     let dir = tempdir().unwrap();
     let mut opts = LsmOptions::default().path(dir.path());
-    opts.memtable_size = 4096 * 10;
+    opts.memtable_size = 4096 * 1000;
     opts.block_size = 4096;
     let storage = Arc::new(opts.open().unwrap());
     let kvs = generate_kvs()
@@ -108,6 +110,83 @@ fn bench_write_tmpfs(c: &mut Criterion) {
     });
 }
 
+fn bench_channel_write_tmpfs(c: &mut Criterion) {
+    let dir = tempdir().unwrap();
+    let mut opts = LsmOptions::default().path(dir.path());
+    opts.memtable_size = 4096 * 1000;
+    opts.block_size = 4096;
+    let storage = Arc::new(opts.open().unwrap());
+
+    c.bench_function("bench_channel_write_tmpfs", |b| {
+        b.iter_custom(|iter| {
+            let kvs = generate_kvs()
+                .into_iter()
+                .map(|x| vec![(Bytes::from(x.0), Bytes::from(x.1))])
+                .collect::<Vec<_>>();
+            let mut rs = Vec::with_capacity(kvs.len());
+            let input = vec![kvs; iter as usize];
+            let start = Instant::now();
+            for kvs in input {
+                for entry in kvs {
+                    let r = storage.put_to_channel(entry).unwrap();
+                    rs.push(r);
+                }
+                for r in &rs {
+                    let _ = r.recv();
+                }
+                rs.clear()
+            }
+            start.elapsed()
+        })
+    });
+}
+
+fn bench_channel_write(c: &mut Criterion) {
+    let mut opts = LsmOptions::default().path(DIR);
+    opts.memtable_size = 4096 * 1000;
+    opts.block_size = 4096;
+    opts.wait_entry_num = 100;
+    let storage = Arc::new(opts.open().unwrap());
+
+    c.bench_function("bench_channel_write", |b| {
+        b.iter_custom(|iter| {
+            let kvs = generate_kvs()
+                .into_iter()
+                .map(|x| vec![(Bytes::from(x.0), Bytes::from(x.1))])
+                .collect::<Vec<_>>();
+            let mut rs = Vec::with_capacity(kvs.len());
+            let input = vec![kvs; iter as usize];
+            let start = Instant::now();
+            for kvs in input {
+                for entry in kvs {
+                    let r = storage.put_to_channel(entry).unwrap();
+                    rs.push(r);
+                }
+                for r in &rs {
+                    let _ = r.recv();
+                }
+                rs.clear()
+            }
+            start.elapsed()
+        })
+    });
+}
+
+fn bench_base_mem(c: &mut Criterion) {
+    let kvs = generate_kvs()
+        .into_iter()
+        .map(|x| (Bytes::from(x.0), Bytes::from(x.1)))
+        .collect::<Vec<_>>();
+    let map = SkipMap::new();
+    c.bench_function("bench_base_mem", |b| {
+        b.iter(|| {
+            for (key, value) in &kvs {
+                map.insert(key.clone(), value.clone());
+            }
+        })
+    });
+}
+
 fn create_test_dir(_: &mut Criterion) {
     create_dir(DIR).unwrap();
 }
@@ -118,13 +197,18 @@ fn remove_test_dir(_: &mut Criterion) {
 
 criterion_group!(
     benches,
+    bench_base_mem,
     create_test_dir,
     bench_batch_write_real,
     remove_test_dir,
     create_test_dir,
     bench_write_real,
     remove_test_dir,
+    create_test_dir,
+    bench_channel_write,
+    remove_test_dir,
     bench_write_tmpfs,
     bench_batch_write_tmpfs,
+    bench_channel_write_tmpfs,
 );
 criterion_main!(benches);
