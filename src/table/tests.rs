@@ -70,6 +70,7 @@ fn test_sst_decode() {
     assert_eq!(new_sst.bloom, bloom);
 }
 
+#[cfg(not(tarpaulin_include))]
 fn as_bytes(x: &[u8]) -> Bytes {
     Bytes::copy_from_slice(x)
 }

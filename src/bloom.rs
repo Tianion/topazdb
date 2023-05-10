@@ -99,6 +99,23 @@ mod tests {
 
     use super::*;
     use xxhash_rust::xxh3;
+
+    #[test]
+    fn test_bit_slice() {
+        let mut buf = vec![0u8; 10];
+        buf.bit_set(1, true);
+        buf.bit_set(2, true);
+        buf.bit_set(5, true);
+        assert!(buf.bit_get(1));
+        assert!(buf.bit_get(2));
+        assert!(buf.bit_get(5));
+        assert!(!buf.bit_get(3));
+        assert!(!buf.bit_get(4));
+        assert!(!buf.bit_get(7));
+        buf.bit_set(2, false);
+        assert!(!buf.bit_get(2));
+    }
+
     #[test]
     fn test_small_bloom_filter() {
         let hash: Vec<_> = vec![b"key1".to_vec(), b"key2".to_vec()]

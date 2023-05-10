@@ -9,6 +9,7 @@ use super::StorageIterator;
 // note: use '>' to compare priority, not fields
 struct HeapWrapper<I: StorageIterator>(pub usize, pub Box<I>);
 
+#[cfg(not(tarpaulin_include))]
 impl<I: StorageIterator> PartialEq for HeapWrapper<I> {
     fn eq(&self, other: &Self) -> bool {
         self.partial_cmp(other).unwrap() == cmp::Ordering::Equal
@@ -28,6 +29,7 @@ impl<I: StorageIterator> PartialOrd for HeapWrapper<I> {
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl<I: StorageIterator> Ord for HeapWrapper<I> {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.partial_cmp(other).unwrap()

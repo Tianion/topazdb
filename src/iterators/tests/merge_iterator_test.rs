@@ -1,10 +1,12 @@
 use super::*;
 use crate::iterators::merge_iterator::MergeIterator;
 
+#[cfg(not(tarpaulin_include))]
 fn as_bytes(x: &[u8]) -> Bytes {
     Bytes::copy_from_slice(x)
 }
 
+#[cfg(not(tarpaulin_include))]
 fn check_iter_result(iter: impl StorageIterator, expected: Vec<(Bytes, Bytes)>) {
     let mut iter = iter;
     for (k, v) in expected {

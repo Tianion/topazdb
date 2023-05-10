@@ -61,6 +61,7 @@ fn test_block_decode() {
     assert_eq!(block.data, decoded_block.data);
 }
 
+#[cfg(not(tarpaulin_include))]
 fn as_bytes(x: &[u8]) -> Bytes {
     Bytes::copy_from_slice(x)
 }
