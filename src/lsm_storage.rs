@@ -30,7 +30,7 @@ pub struct LsmStorageInner {
 
 pub struct Request {
     entries: Vec<(Bytes, Bytes)>,
-    sender: Sender<bool>,
+    sender: Option<Sender<Result<(), String>>>,
 }
 
 impl LsmStorageInner {
@@ -49,35 +49,32 @@ impl LsmStorageInner {
         closer: Arc<Receiver<()>>,
     ) {
         pool.spawn(move |_: &mut Handle| {
+            use std::result::Result::Ok;
             let mut buf = Vec::new();
             let mut senders = Vec::new();
-            let mut run_once = |mut request: Request| {
-                buf.append(&mut request.entries);
-                if buf.len() > 10 {
-                    return;
+            loop {
+                while let Ok(mut request) = receiver.try_recv() {
+                    buf.append(&mut request.entries);
+                    if buf.len() > self.opts.wait_entry_num {
+                        break;
+                    }
+                    senders.push(request.sender);
                 }
-                senders.push(request.sender);
-
-                let mut ret = true;
+                let mut ret = Ok(());
                 if let Err(e) = self.memtables.read().put_entries(&buf) {
                     error!("put_entries error: {e}");
-                    ret = false;
+                    ret = Err(format!("{}", e));
                 }
 
-                for sender in &senders {
-                    if let Err(e) = sender.send(ret) {
-                        error!("sender err: {e}");
-                    }
+                for sender in senders.iter().flatten() {
+                    sender.send(ret.clone()).unwrap();
                 }
-
                 buf.clear();
                 senders.clear();
-            };
-            loop {
-                select! {
-                    recv(receiver) -> req => run_once(req.unwrap()),
-                    recv(closer) -> _ => break,
-                };
+
+                if closer.try_recv() != Err(crossbeam_channel::TryRecvError::Empty) {
+                    break;
+                }
             }
         });
     }
@@ -247,14 +244,29 @@ impl LsmStorage {
     pub fn put_to_channel(
         &self,
         entries: Vec<(Bytes, Bytes)>,
-    ) -> Result<crossbeam_channel::Receiver<bool>> {
+    ) -> Result<crossbeam_channel::Receiver<Result<(), String>>> {
         if self.write_sender.is_none() {
             return Err(anyhow::anyhow!("write sender is empty"));
         }
         let (sender, receiver) = crossbeam_channel::unbounded();
-        let request = Request { entries, sender };
+        let request = Request {
+            entries,
+            sender: Some(sender),
+        };
         self.write_sender.as_ref().unwrap().send(request)?;
         Ok(receiver)
+    }
+
+    pub fn put_to_channel_not_msg(&self, entries: Vec<(Bytes, Bytes)>) -> Result<()> {
+        if self.write_sender.is_none() {
+            return Err(anyhow::anyhow!("write sender is empty"));
+        }
+        let request = Request {
+            entries,
+            sender: None,
+        };
+        self.write_sender.as_ref().unwrap().send(request)?;
+        Ok(())
     }
 
     fn may_use_new_table(&self, size: usize) -> Result<()> {

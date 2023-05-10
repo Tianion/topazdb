@@ -70,7 +70,7 @@ fn test_storage_channel_put() {
         rs.push(r);
     }
     for r in rs {
-        assert!(r.recv().unwrap());
+        r.recv().unwrap().unwrap();
     }
     for kv in kvs {
         assert_eq!(storage.get(&kv.0).unwrap().unwrap(), kv.1);
