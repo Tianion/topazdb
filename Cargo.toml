@@ -28,14 +28,18 @@ features = ["xxh3", "const_xxh3"]
 
 [dev-dependencies]
 tempfile = "*"
-criterion = "*"
+criterion = { version = "0.4.0", features = ["html_reports"] }
 
 [[bench]]
-name = "sstable_read"
+name = "sstable_iter_read"
 harness = false
 
 [[bench]]
 name = "write"
+harness = false
+
+[[bench]]
+name = "disk_read"
 harness = false
 
 [profile.bench]
