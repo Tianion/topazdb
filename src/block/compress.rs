@@ -34,6 +34,7 @@ pub enum CompressOptions {
     Lz4 = 3,
 }
 
+#[cfg(not(tarpaulin_include))]
 impl fmt::Display for CompressOptions {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -77,10 +78,10 @@ fn lz4_encode(data: &[u8]) -> Result<Bytes> {
 
 /// return compressed data
 ///
-/// Error: buf is too big or too small
+/// Error: buf is too big or too small or Unkown compress option
 pub fn encode(data: &[u8], opt: CompressOptions) -> Result<Bytes> {
     match opt {
-        CompressOptions::Unkown => panic!("unkown compress option"),
+        CompressOptions::Unkown => Err(anyhow::anyhow!("unkown compress option")),
         CompressOptions::Uncompress => {
             let mut buf = BytesMut::from(data);
             buf.put_u8(CompressOptions::Uncompress.into());
@@ -116,6 +117,20 @@ mod test {
     use crate::block::{compress::CompressOptions, BlockBuilder};
 
     use super::{decode, encode};
+
+    #[test]
+    fn test_option() {
+        for i in 0..10 {
+            assert_eq!(Into::<CompressOptions>::into(i), CompressOptions::from(i));
+        }
+    }
+
+    #[test]
+    fn test_empty_data() {
+        let str = b"";
+        assert!(encode(str, CompressOptions::Unkown).is_err());
+        assert!(decode(str).is_err());
+    }
 
     #[test]
     fn test_snappy() {

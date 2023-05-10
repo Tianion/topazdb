@@ -130,48 +130,6 @@ impl LevelsControllerInner {
         x
     }
 
-    /// tired compact, merge front 'size' tables.
-    // unused
-    #[allow(unused)]
-    fn l0_tired_compact(&self, block_cache: Arc<BlockCache>) -> Result<()> {
-        // unimplemented!();
-        let tables = self.levels[0].read().clone();
-
-        let mut iters = Vec::with_capacity(tables.len());
-
-        for table in tables {
-            let iter = Box::new(SsTableIterator::create_and_seek_to_first(table.clone())?);
-            iters.push(iter);
-        }
-
-        let mut iter = MergeIterator::create(iters);
-
-        let mut builder = SsTableBuilder::new(self.opts.clone());
-        while iter.is_valid() {
-            builder.add(iter.key(), iter.value());
-            iter.next()?;
-        }
-
-        let id = self.next_sst_id.fetch_add(1, Ordering::Relaxed);
-
-        // let sst = Arc::new(builder.build(id, Some(block_cache.clone()), self.sstable_file_path(id))?);
-        // let front = vec![sst];
-
-        // {
-        //     // let mut manifest = self.manifest.lock();
-        //     let mut guard = self.inner.levels[0].write();
-
-        //     for _ in 0..size {
-        //         let table = guard.pop_front().unwrap();
-        //         // manifest.delete(table.id() as u64)?;
-        //     }
-        //     guard.push_front(sst.clone());
-        //     // manifest.add(sst.id() as u64, 0)?;
-        // }
-
-        Ok(())
-    }
-
     fn do_compact(self: &Arc<Self>, idx: usize, pri: TaskPriority) -> Result<()> {
         let level = pri.level;
         assert!(level + 1 < MAX_LEVEL);
